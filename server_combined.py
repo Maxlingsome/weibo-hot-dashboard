@@ -500,7 +500,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(results)
 
         elif path == "/" or path == "/index.html":
-            html_path = os.path.join(BASE_DIR, "index_taste.html")
+            html_path = os.path.join(BASE_DIR, "index_live.html")
+            if not os.path.exists(html_path):
+                html_path = os.path.join(BASE_DIR, "index_taste.html")
             if not os.path.exists(html_path):
                 html_path = os.path.join(BASE_DIR, "index_combined.html")
             if os.path.exists(html_path):

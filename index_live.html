@@ -231,7 +231,6 @@ footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)
   <button onclick="switchTab('kuaishou')">快手热搜</button>
   <button onclick="switchTab('search')">话题搜索</button>
   <button onclick="switchTab('generate')">AI 文案</button>
-  <button onclick="switchTab('learn')">每日学习</button>
 </div>
 
 <!-- Weibo -->
@@ -294,18 +293,12 @@ footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)
   </div></div>
 </div>
 
-<!-- Learn -->
-<div id="tab-learn" class="tab-content">
-  <div class="date-nav" id="dateNav"></div>
-  <div id="learnContent"></div>
-</div>
-
 <footer></footer>
 </div>
 
 <script>
 // === Tab Switch ===
-const TABS=['weibo','douyin','kuaishou','search','generate','learn'];
+const TABS=['weibo','douyin','kuaishou','search','generate'];
 function switchTab(name){
   document.querySelectorAll('.tab-bar button').forEach((b,i)=>b.classList.toggle('active',i===TABS.indexOf(name)));
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
@@ -429,29 +422,8 @@ async function doGenerate(){
   btn.disabled=false;btn.textContent='生成文案';
 }
 
-// === Daily Learn ===
-async function initLearn(){
-  try{
-    const data=await fetch('/data.json').then(r=>r.json());
-    document.title='热搜面板 · '+data.date;renderLearn(data);
-    const idx=await fetch('/archive/index.json').then(r=>r.json());
-    const nav=document.getElementById('dateNav');
-    (idx.entries||[]).forEach(e=>{const btn=document.createElement('button');btn.textContent=e.date;btn.onclick=async()=>{document.querySelectorAll('.date-nav button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');try{renderLearn(await fetch('/archive/'+e.date+'.json').then(r=>r.json()))}catch(ex){}};nav.appendChild(btn)});
-  }catch(e){}
-}
-function renderLearn(data){
-  if(!data)return;let h='';
-  if(data.douyin_hot&&data.douyin_hot.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2><span class="accent-dot d"></span>抖音热搜 Top 10</h2></div><table>';data.douyin_hot.forEach((t,i)=>h+='<tr><td class="rank dy-top">'+(i+1)+'</td><td>'+t.title+'</td><td class="hot-val">'+t.hot+'</td></tr>');h+='</table></div></div>'}
-  if(data.topics&&data.topics.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2>深入分析</h2></div>';data.topics.forEach(t=>h+='<div class="topic-card"><strong>#'+(t.topic||'')+'</strong> <span class="tag tag-pattern">'+(t.pattern||'')+'</span> <span style="color:var(--ink-dim);font-size:12px">'+(t.content_type||'')+'</span><div style="margin-top:4px">'+(t.insight||'')+'</div></div>');h+='</div></div>'}
-  if(data.net_sense&&data.net_sense.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2>今日网感</h2></div>';data.net_sense.forEach(n=>h+='<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span class="tag '+(n.platform==='抖音'?'tag-dy':'tag-wb')+'">'+(n.platform||'微博')+'</span> <span style="color:var(--ink-dim);font-size:12px">'+(n.source||'')+'</span> &rarr; '+(n.insight||'')+'</div>');h+='</div></div>'}
-  if(data.learnings&&data.learnings.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2>学到的</h2></div>';data.learnings.forEach(l=>h+='<div class="insight">'+l+'</div>');h+='</div></div>'}
-  if(data.hot_list&&data.hot_list.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2><span class="accent-dot w"></span>微博热搜 Top 10</h2></div><table>';data.hot_list.forEach((t,i)=>{const u='https://s.weibo.com/weibo?q=%23'+encodeURIComponent(t.title||'')+'%23';h+='<tr><td class="rank wb-top">'+(i+1)+'</td><td class="word"><a href="'+u+'" target="_blank">'+(t.title||'')+'</a></td><td class="hot-val">'+(t.hot||'')+'</td></tr>'});h+='</table></div></div>'}
-  if(data.case_library&&data.case_library.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2>案例库</h2></div>';data.case_library.forEach(c=>h+='<div style="padding:3px 0;font-size:13px"><span style="color:var(--ink-muted);font-size:10px">'+(c.date||'')+'</span> '+(c.source||'')+' &rarr; <strong>'+(c.insight||'')+'</strong></div>');h+='</div></div>'}
-  document.getElementById('learnContent').innerHTML=h||'<div class="empty">暂无数据</div>';
-}
-
 // === Init ===
-loadWeibo();loadWenyu();loadDouyin();loadKuaishou();initLearn();
+loadWeibo();loadWenyu();loadDouyin();loadKuaishou();
 setInterval(()=>{loadWeibo();loadWenyu();loadDouyin();loadKuaishou()},180000);
 </script>
 </body>
