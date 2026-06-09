@@ -292,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
             local_results = _search_db(os.path.join(BASE_DIR, "weibo_history.db"), query)
             if local_results:
                 result = []
-                for i, r in enumerate(local_results[:50], 1):
+                for i, r in enumerate(local_results, 1):
                     result.append({
                         "rank": i, "name": r["word"], "lastTime": r["last_date"],
                         "peakRank": r["best_rank"], "appearances": r["appearances"],
@@ -383,7 +383,7 @@ class Handler(BaseHTTPRequestHandler):
                 if r["word"] not in seen:
                     self_results.append(r)
                     seen.add(r["word"])
-            results = self_results[:50]
+            results = self_results  # 全量返回
 
             # 兜底：实时热搜中匹配
             if not results:
