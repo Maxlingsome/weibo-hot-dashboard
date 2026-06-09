@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, urlparse
 
 # 引入微博 API
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from weibotop_api import get_latest, get_items, search_topic
+from weibotop_api import get_latest, get_items, search_topic, get_topic_detail
 
 # ---- 自建历史数据库（抖音 + 微博）----
 DY_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "douyin_self.db")
@@ -288,20 +288,43 @@ class Handler(BaseHTTPRequestHandler):
             query = params.get("q", [""])[0].strip()
             if not query:
                 return self._json([])
-            results = search_topic(query)
+            results = search_topic(query)[:20]
             # 从自建库获取峰值排名
             peak_map = {}
             self_results = search_weibo_self_db(query)
             for r in self_results:
                 peak_map[r["word"]] = r["best_rank"]
+            # 对自建库里没有的话题，用 weibotop.cn 补查（只查前5个，避免太慢）
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            need_fetch = [(i, item) for i, item in enumerate(results) if not peak_map.get(item[0])][:5]
+            if need_fetch:
+                def fetch_peak(item):
+                    try:
+                        detail = get_topic_detail(item[0])
+                        # 返回 [timeId, timestamp, rank]
+                        if isinstance(detail, list) and len(detail) >= 3:
+                            return item[0], int(detail[2])
+                        return item[0], None
+                    except:
+                        return item[0], None
+                with ThreadPoolExecutor(max_workers=5) as ex:
+                    futures = {ex.submit(fetch_peak, item): idx for idx, item in need_fetch}
+                    for fut in as_completed(futures, timeout=10):
+                        try:
+                            name, rank = fut.result()
+                            if rank:
+                                peak_map[name] = rank
+                        except:
+                            pass
             result = []
             for i, item in enumerate(results[:20], 1):
                 name = item[0]
                 last_time = item[1].replace(".0", "") if len(item) > 1 else ""
+                peak = peak_map.get(name)
                 entry = {
                     "rank": i, "name": name, "lastTime": last_time,
                     "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(name)}%23",
-                    "peakRank": peak_map.get(name, None)
+                    "peakRank": peak
                 }
                 result.append(entry)
             self._json(result)
