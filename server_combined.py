@@ -352,7 +352,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(results)
 
         elif path == "/" or path == "/index.html":
-            html_path = os.path.join(BASE_DIR, "index_combined.html")
+            html_path = os.path.join(BASE_DIR, "index_taste.html")
+            if not os.path.exists(html_path):
+                html_path = os.path.join(BASE_DIR, "index_combined.html")
             if os.path.exists(html_path):
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -361,6 +363,17 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(f.read())
             else:
                 self.send_error(404)
+
+        elif path.endswith(".html") and os.path.exists(os.path.join(BASE_DIR, path.lstrip("/"))):
+            fp = os.path.join(BASE_DIR, path.lstrip("/"))
+            if fp.startswith(BASE_DIR):
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                with open(fp, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_error(403)
 
         elif path.startswith("/archive/"):
             safe = os.path.normpath(path.lstrip("/"))
@@ -527,3 +540,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
