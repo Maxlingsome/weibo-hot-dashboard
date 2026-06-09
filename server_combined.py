@@ -432,7 +432,7 @@ def _ensure_backup_dir():
     os.makedirs(BACKUP_DIR, exist_ok=True)
 
 def export_backup():
-    """导出双平台数据库 → backup/ 目录"""
+    """导出双平台数据库 → backup/ 目录（含峰值汇总）"""
     _ensure_backup_dir()
     total = 0
     for db_path, filename in [(DY_SELF_DB, "douyin_data.json"), (WB_SELF_DB, "weibo_data.json")]:
@@ -440,10 +440,23 @@ def export_backup():
         db.row_factory = sqlite3.Row
         rows = db.execute("SELECT word, date, rank, hot_value FROM topics ORDER BY date DESC, rank ASC").fetchall()
         db.close()
+        # 计算每个话题的最高排名
+        peak = {}
+        for r in rows:
+            w = r["word"]
+            if w not in peak or r["rank"] < peak[w]["best_rank"]:
+                peak[w] = {"word": w, "best_rank": r["rank"], "appearances": 0, "first_date": r["date"], "last_date": r["date"]}
+            info = peak[w]
+            info["appearances"] += 1
+            info["first_date"] = min(info["first_date"], r["date"])
+            info["last_date"] = max(info["last_date"], r["date"])
+
         data = {
             "updated": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            "total": len(rows),
-            "topics": [{"word": r["word"], "date": r["date"], "rank": r["rank"], "hot": r["hot_value"]} for r in rows]
+            "total_records": len(rows),
+            "total_topics": len(peak),
+            "records": [{"word": r["word"], "date": r["date"], "rank": r["rank"], "hot": r["hot_value"]} for r in rows],
+            "peak_summary": sorted(peak.values(), key=lambda x: x["appearances"], reverse=True)
         }
         path = os.path.join(BACKUP_DIR, filename)
         with open(path, "w", encoding="utf-8") as f:
