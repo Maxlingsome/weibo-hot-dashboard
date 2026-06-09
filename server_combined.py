@@ -183,9 +183,45 @@ def fetch_weibo_wenyu():
         print(f"[文娱榜] 抓取失败: {e}")
         return []
 
+def fetch_kuaishou_hot():
+    """抓取快手实时热搜"""
+    try:
+        import re
+        url = "https://www.kuaishou.com/?isHome=1"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "zh-CN,zh;q=0.9",
+        })
+        with urllib.request.urlopen(req, timeout=15) as r:
+            html = r.read().decode()
+        match = re.search(r'window\.__APOLLO_STATE__=(.*?);\(function\(\)', html, re.DOTALL)
+        if not match:
+            return []
+        data = json.loads(match.group(1))
+        client = data.get("defaultClient", {})
+        root_key = [k for k in client.keys() if "visionHotRank" in k]
+        if not root_key:
+            return []
+        items_ref = client[root_key[0]].get("items", [])
+        result = []
+        for i, item_ref in enumerate(items_ref, 1):
+            hot_item = client.get(item_ref["id"], {})
+            name = hot_item.get("name", "")
+            hot_val = hot_item.get("hotValue", "")
+            result.append({
+                "rank": i, "title": name, "hot": hot_val or "—",
+                "url": f"https://www.kuaishou.com/search/video?searchKey={urllib.request.quote(name)}"
+            })
+        return result
+    except Exception as e:
+        print(f"[快手] 抓取失败: {e}")
+        return []
+
 
 # ---- 内存缓存 ----
-CACHE = {"weibo": [], "douyin": [], "wenyu": [], "weibo_time": 0, "douyin_time": 0, "wenyu_time": 0}
+CACHE = {"weibo": [], "douyin": [], "wenyu": [], "kuaishou": [],
+         "weibo_time": 0, "douyin_time": 0, "wenyu_time": 0, "kuaishou_time": 0}
 cache_lock = threading.Lock()
 
 
@@ -229,6 +265,19 @@ def poll_wenyu():
                 print(f"[文娱榜] {len(items)} 条")
         except Exception as e:
             print(f"[文娱榜] 轮询异常: {e}")
+        time.sleep(180)
+
+def poll_kuaishou():
+    while True:
+        try:
+            items = fetch_kuaishou_hot()
+            if items:
+                with cache_lock:
+                    CACHE["kuaishou"] = items
+                    CACHE["kuaishou_time"] = time.time()
+                print(f"[快手] {len(items)} 条")
+        except Exception as e:
+            print(f"[快手] 轮询异常: {e}")
         time.sleep(180)
 
 
@@ -318,6 +367,11 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/wenyu":
             with cache_lock:
                 data = list(CACHE["wenyu"])
+            self._json(data)
+
+        elif path == "/api/kuaishou":
+            with cache_lock:
+                data = list(CACHE["kuaishou"])
             self._json(data)
 
         elif path == "/api/all":
@@ -606,20 +660,15 @@ def main():
 
     # 首次抓取
     print("首次抓取中...")
-    for name, fn in [("微博", fetch_weibo_hot), ("抖音", fetch_douyin_hot), ("文娱", fetch_weibo_wenyu)]:
+    for name, fn in [("微博", fetch_weibo_hot), ("抖音", fetch_douyin_hot), ("文娱", fetch_weibo_wenyu), ("快手", fetch_kuaishou_hot)]:
         try:
             items = fn()
             if items:
                 with cache_lock:
-                    if name == "微博":
-                        CACHE["weibo"] = items
-                        CACHE["weibo_time"] = time.time()
-                    elif name == "抖音":
-                        CACHE["douyin"] = items
-                        CACHE["douyin_time"] = time.time()
-                    else:
-                        CACHE["wenyu"] = items
-                        CACHE["wenyu_time"] = time.time()
+                    key_map = {"微博": "weibo", "抖音": "douyin", "文娱": "wenyu", "快手": "kuaishou"}
+                    k = key_map.get(name, name)
+                    CACHE[k] = items
+                    CACHE[k + "_time"] = time.time()
                 print(f"  [{name}] {len(items)} 条")
         except Exception as e:
             print(f"  [{name}] 失败: {e}")
@@ -628,6 +677,7 @@ def main():
     threading.Thread(target=poll_weibo, daemon=True).start()
     threading.Thread(target=poll_douyin, daemon=True).start()
     threading.Thread(target=poll_wenyu, daemon=True).start()
+    threading.Thread(target=poll_kuaishou, daemon=True).start()
     threading.Thread(target=backup_loop, daemon=True).start()
 
     # 首次备份（1分钟后，等首批数据入库）

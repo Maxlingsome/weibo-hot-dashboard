@@ -228,6 +228,7 @@ footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)
 <div class="tab-bar">
   <button class="active" onclick="switchTab('weibo')">微博热搜</button>
   <button onclick="switchTab('douyin')">抖音热搜</button>
+  <button onclick="switchTab('kuaishou')">快手热搜</button>
   <button onclick="switchTab('search')">话题搜索</button>
   <button onclick="switchTab('generate')">AI 文案</button>
   <button onclick="switchTab('learn')">每日学习</button>
@@ -264,6 +265,19 @@ footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)
   </div></div>
 </div>
 
+<!-- Kuaishou -->
+<div id="tab-kuaishou" class="tab-content">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">快手热搜</div><div class="value" style="color:#ff4906" id="ksCount">—</div><div class="sub">实时 Top 50</div></div>
+    <div class="stat-card"><div class="label">更新时间</div><div class="value" style="font-size:20px" id="ksTime">—</div></div>
+    <div class="stat-card" style="grid-column:span 1"><div class="label">Top 1</div><div class="value" style="font-size:16px;line-height:1.3" id="ksTop1">—</div></div>
+  </div>
+  <div class="card-outer"><div class="card-inner">
+    <div class="card-header"><h2><span class="accent-dot" style="background:#ff4906;box-shadow:0 0 6px rgba(255,73,6,.3)"></span>快手热搜</h2><span class="meta">每 3 分钟自动更新</span></div>
+    <table><thead><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr></thead><tbody id="ksBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table>
+  </div></div>
+</div>
+
 <!-- Search -->
 <div id="tab-search" class="tab-content">
   <div class="card-outer"><div class="card-inner">
@@ -295,7 +309,7 @@ footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)
 
 <script>
 // === Tab Switch ===
-const TABS=['weibo','douyin','search','generate','learn'];
+const TABS=['weibo','douyin','kuaishou','search','generate','learn'];
 function switchTab(name){
   document.querySelectorAll('.tab-bar button').forEach((b,i)=>b.classList.toggle('active',i===TABS.indexOf(name)));
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
@@ -326,6 +340,20 @@ async function loadWenyu(){
     document.getElementById('wyCount').textContent=items.length;
     document.getElementById('wyBody').innerHTML=items.map(i=>
       '<tr><td class="rank'+(i.rank<=3?' dy-top':'')+'">'+i.rank+'</td><td class="word"><a class="dy-link" href="'+i.url+'" target="_blank">'+i.title+'</a></td><td style="font-size:11px;color:var(--ink-dim)">'+(i.label||'')+'</td><td class="hot-val">'+i.hot+'</td></tr>'
+    ).join('');
+  }catch(e){}
+}
+// === Load Kuaishou ===
+async function loadKuaishou(){
+  try{
+    const items=await fetch('/api/kuaishou').then(r=>r.json());
+    if(!items.length)return;
+    const d=new Date(); const ts=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+    document.getElementById('ksCount').textContent=items.length;
+    document.getElementById('ksTime').textContent=ts;
+    document.getElementById('ksTop1').textContent=items[0]?.title||'—';
+    document.getElementById('ksBody').innerHTML=items.map(i=>
+      '<tr><td class="rank'+(i.rank<=3?'" style="color:#ff4906"':'')+'">'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td><td class="hot-val">'+i.hot+'</td></tr>'
     ).join('');
   }catch(e){}
 }
@@ -419,8 +447,8 @@ function renderLearn(data){
 }
 
 // === Init ===
-loadWeibo();loadWenyu();loadDouyin();initLearn();
-setInterval(()=>{loadWeibo();loadWenyu();loadDouyin()},180000);
+loadWeibo();loadWenyu();loadDouyin();loadKuaishou();initLearn();
+setInterval(()=>{loadWeibo();loadWenyu();loadDouyin();loadKuaishou()},180000);
 </script>
 </body>
 </html>
