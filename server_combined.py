@@ -20,66 +20,61 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from weibotop_api import get_latest, get_items, search_topic
 
-# ---- 自建抖音历史数据库 ----
-SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "douyin_self.db")
+# ---- 自建历史数据库（抖音 + 微博）----
+DY_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "douyin_self.db")
+WB_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "weibo_self.db")
 
-def init_self_db():
-    """初始化自采集数据库"""
-    db = sqlite3.connect(SELF_DB)
+def _init_one_db(db_path):
+    db = sqlite3.connect(db_path)
     db.execute("PRAGMA journal_mode=WAL")
-    db.execute("""
-        CREATE TABLE IF NOT EXISTS topics (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            word TEXT NOT NULL,
-            date TEXT NOT NULL,
-            rank INTEGER NOT NULL,
-            hot_value INTEGER DEFAULT 0
-        )
-    """)
+    db.execute("""CREATE TABLE IF NOT EXISTS topics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, word TEXT NOT NULL,
+        date TEXT NOT NULL, rank INTEGER NOT NULL, hot_value INTEGER DEFAULT 0)""")
     db.execute("CREATE INDEX IF NOT EXISTS idx_word ON topics(word)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_date ON topics(date)")
     db.commit()
     db.close()
 
-def save_douyin_snapshot(items):
-    """保存本轮抖音热搜到数据库（去重：同一天同一话题只保留最高排名）"""
+def init_self_db():
+    _init_one_db(DY_SELF_DB)
+    _init_one_db(WB_SELF_DB)
+
+def _save_snapshot(db_path, items, word_key="title"):
+    """通用：保存热搜快照，同一天同一话题保留最高排名"""
     today = date.today().isoformat()
-    db = sqlite3.connect(SELF_DB)
+    db = sqlite3.connect(db_path)
     for item in items:
-        word = item.get("title", "")
+        word = item.get(word_key, "")
         rank = item.get("rank", 0)
         hot = item.get("hot_value", 0)
         if not word:
             continue
-        # 检查今天是否已有该话题
-        existing = db.execute(
-            "SELECT id, rank FROM topics WHERE word=? AND date=?", (word, today)
-        ).fetchone()
+        existing = db.execute("SELECT id, rank FROM topics WHERE word=? AND date=?", (word, today)).fetchone()
         if existing:
-            # 保留更好的排名
             if rank < existing[1]:
                 db.execute("UPDATE topics SET rank=?, hot_value=? WHERE id=?", (rank, hot, existing[0]))
         else:
-            db.execute("INSERT INTO topics(word, date, rank, hot_value) VALUES(?,?,?,?)",
-                       (word, today, rank, hot))
+            db.execute("INSERT INTO topics(word, date, rank, hot_value) VALUES(?,?,?,?)", (word, today, rank, hot))
     db.commit()
     db.close()
 
-def search_self_db(query):
-    """在自建数据库中搜索"""
+def save_douyin_snapshot(items):
+    _save_snapshot(DY_SELF_DB, items)
+
+def save_weibo_snapshot(items):
+    _save_snapshot(WB_SELF_DB, items, word_key="title")
+
+def _search_db(db_path, query):
+    """通用：搜索数据库，返回聚合结果"""
     try:
-        db = sqlite3.connect(SELF_DB)
+        db = sqlite3.connect(db_path)
         db.row_factory = sqlite3.Row
-        rows = db.execute(
-            "SELECT word, date, rank FROM topics WHERE word LIKE ? ORDER BY date DESC, rank ASC LIMIT 200",
-            (f"%{query}%",)
-        ).fetchall()
+        rows = db.execute("SELECT word, date, rank FROM topics WHERE word LIKE ? ORDER BY date DESC, rank ASC LIMIT 200", (f"%{query}%",)).fetchall()
         by_word = {}
         for r in rows:
             w = r["word"]
             if w not in by_word:
-                by_word[w] = {"word": w, "first_date": r["date"], "last_date": r["date"],
-                              "best_rank": r["rank"], "appearances": 0, "history": []}
+                by_word[w] = {"word": w, "first_date": r["date"], "last_date": r["date"], "best_rank": r["rank"], "appearances": 0, "history": []}
             info = by_word[w]
             info["appearances"] += 1
             info["first_date"] = min(info["first_date"], r["date"])
@@ -91,6 +86,12 @@ def search_self_db(query):
         return sorted(by_word.values(), key=lambda x: x["appearances"], reverse=True)
     except:
         return []
+
+def search_self_db(query):
+    return _search_db(DY_SELF_DB, query)
+
+def search_weibo_self_db(query):
+    return _search_db(WB_SELF_DB, query)
 
 PORT = int(os.getenv("PORT", "18768"))
 
@@ -170,7 +171,8 @@ def poll_weibo():
                 with cache_lock:
                     CACHE["weibo"] = items
                     CACHE["weibo_time"] = time.time()
-                print(f"[微博] {len(items)} 条热搜")
+                save_weibo_snapshot(items)
+                print(f"[微博] {len(items)} 条热搜（已保存）")
         except Exception as e:
             print(f"[微博] 轮询异常: {e}")
         time.sleep(180)  # 3分钟
@@ -287,14 +289,21 @@ class Handler(BaseHTTPRequestHandler):
             if not query:
                 return self._json([])
             results = search_topic(query)
+            # 从自建库获取峰值排名
+            peak_map = {}
+            self_results = search_weibo_self_db(query)
+            for r in self_results:
+                peak_map[r["word"]] = r["best_rank"]
             result = []
             for i, item in enumerate(results[:20], 1):
                 name = item[0]
                 last_time = item[1].replace(".0", "") if len(item) > 1 else ""
-                result.append({
+                entry = {
                     "rank": i, "name": name, "lastTime": last_time,
-                    "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(name)}%23"
-                })
+                    "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(name)}%23",
+                    "peakRank": peak_map.get(name, None)
+                }
+                result.append(entry)
             self._json(result)
 
         elif path == "/api/search-douyin":
@@ -423,21 +432,24 @@ def _ensure_backup_dir():
     os.makedirs(BACKUP_DIR, exist_ok=True)
 
 def export_backup():
-    """导出数据库为 JSON → backup/douyin_data.json"""
+    """导出双平台数据库 → backup/ 目录"""
     _ensure_backup_dir()
-    db = sqlite3.connect(SELF_DB)
-    db.row_factory = sqlite3.Row
-    rows = db.execute("SELECT word, date, rank, hot_value FROM topics ORDER BY date DESC, rank ASC").fetchall()
-    db.close()
-    data = {
-        "updated": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "total": len(rows),
-        "topics": [{"word": r["word"], "date": r["date"], "rank": r["rank"], "hot": r["hot_value"]} for r in rows]
-    }
-    path = os.path.join(BACKUP_DIR, BACKUP_FILE)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
-    return path, len(rows)
+    total = 0
+    for db_path, filename in [(DY_SELF_DB, "douyin_data.json"), (WB_SELF_DB, "weibo_data.json")]:
+        db = sqlite3.connect(db_path)
+        db.row_factory = sqlite3.Row
+        rows = db.execute("SELECT word, date, rank, hot_value FROM topics ORDER BY date DESC, rank ASC").fetchall()
+        db.close()
+        data = {
+            "updated": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "total": len(rows),
+            "topics": [{"word": r["word"], "date": r["date"], "rank": r["rank"], "hot": r["hot_value"]} for r in rows]
+        }
+        path = os.path.join(BACKUP_DIR, filename)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        total += len(rows)
+    return os.path.join(BACKUP_DIR, "douyin_data.json"), total
 
 def import_backup():
     """从备份恢复（仅当本地数据库为空时）"""
@@ -471,8 +483,8 @@ def push_backup():
         if count == 0:
             return "无数据，跳过"
         import subprocess
-        subprocess.run(["git", "add", f"backup/{BACKUP_FILE}"], cwd=BASE_DIR, capture_output=True, timeout=20)
-        subprocess.run(["git", "commit", "-m", f"[自动备份] {count}条 {time.strftime('%m-%d %H:%M')}"],
+        subprocess.run(["git", "add", "backup/douyin_data.json", "backup/weibo_data.json"], cwd=BASE_DIR, capture_output=True, timeout=20)
+        subprocess.run(["git", "commit", "-m", f"[自动备份] {count}条(微博+抖音) {time.strftime('%m-%d %H:%M')}"],
                        cwd=BASE_DIR, capture_output=True, timeout=20)
         subprocess.run(["git", "push"], cwd=BASE_DIR, capture_output=True, timeout=60)
         return f"✅ {count} 条已备份到 GitHub"
