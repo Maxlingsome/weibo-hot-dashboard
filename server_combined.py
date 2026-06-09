@@ -288,7 +288,7 @@ class Handler(BaseHTTPRequestHandler):
             query = params.get("q", [""])[0].strip()
             if not query:
                 return self._json([])
-            results = search_topic(query)[:20]
+            results = search_topic(query)[:50]
             # 从自建库获取峰值排名
             peak_map = {}
             self_results = search_weibo_self_db(query)
@@ -296,7 +296,7 @@ class Handler(BaseHTTPRequestHandler):
                 peak_map[r["word"]] = r["best_rank"]
             # 对自建库里没有的话题，用 weibotop.cn 补查（只查前5个，避免太慢）
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            need_fetch = [(i, item) for i, item in enumerate(results) if not peak_map.get(item[0])][:5]
+            need_fetch = [(i, item) for i, item in enumerate(results) if not peak_map.get(item[0])][:20]
             if need_fetch:
                 def fetch_peak(item):
                     try:
@@ -307,9 +307,9 @@ class Handler(BaseHTTPRequestHandler):
                         return item[0], None
                     except:
                         return item[0], None
-                with ThreadPoolExecutor(max_workers=5) as ex:
+                with ThreadPoolExecutor(max_workers=10) as ex:
                     futures = {ex.submit(fetch_peak, item): idx for idx, item in need_fetch}
-                    for fut in as_completed(futures, timeout=10):
+                    for fut in as_completed(futures, timeout=15):
                         try:
                             name, rank = fut.result()
                             if rank:
@@ -317,7 +317,7 @@ class Handler(BaseHTTPRequestHandler):
                         except:
                             pass
             result = []
-            for i, item in enumerate(results[:20], 1):
+            for i, item in enumerate(results, 1):
                 name = item[0]
                 last_time = item[1].replace(".0", "") if len(item) > 1 else ""
                 peak = peak_map.get(name)
@@ -371,7 +371,7 @@ class Handler(BaseHTTPRequestHandler):
                 if r["word"] not in seen:
                     self_results.append(r)
                     seen.add(r["word"])
-            results = self_results[:20]
+            results = self_results[:50]
 
             # 兜底：实时热搜中匹配
             if not results:
