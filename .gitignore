@@ -9,4 +9,7 @@ railway.toml
 douyin_self.db
 douyin_self.db-*
 weibo_self.db
+weibo_self.db-*
+kuaishou_self.db
+kuaishou_self.db-*
 douyin_history.db-*

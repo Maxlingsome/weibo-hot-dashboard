@@ -23,6 +23,7 @@ from weibotop_api import get_latest, get_items, search_topic, get_topic_detail
 # ---- 自建历史数据库（抖音 + 微博）----
 DY_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "douyin_self.db")
 WB_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "weibo_self.db")
+KS_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kuaishou_self.db")
 
 def _init_one_db(db_path):
     db = sqlite3.connect(db_path)
@@ -36,8 +37,8 @@ def _init_one_db(db_path):
     db.close()
 
 def init_self_db():
-    _init_one_db(DY_SELF_DB)
-    _init_one_db(WB_SELF_DB)
+    for db_path in [DY_SELF_DB, WB_SELF_DB, KS_SELF_DB]:
+        _init_one_db(db_path)
 
 def _save_snapshot(db_path, items, word_key="title"):
     """通用：保存热搜快照，同一天同一话题保留最高排名"""
@@ -63,6 +64,9 @@ def save_douyin_snapshot(items):
 
 def save_weibo_snapshot(items):
     _save_snapshot(WB_SELF_DB, items, word_key="title")
+
+def save_kuaishou_snapshot(items):
+    _save_snapshot(KS_SELF_DB, items, word_key="title")
 
 def _search_db(db_path, query):
     """通用：搜索数据库，返回聚合结果"""
@@ -276,7 +280,8 @@ def poll_kuaishou():
                 with cache_lock:
                     CACHE["kuaishou"] = items
                     CACHE["kuaishou_time"] = time.time()
-                print(f"[快手] {len(items)} 条")
+                save_kuaishou_snapshot(items)
+                print(f"[快手] {len(items)} 条（已保存）")
         except Exception as e:
             print(f"[快手] 轮询异常: {e}")
         time.sleep(180)
@@ -569,7 +574,7 @@ def export_backup():
     """导出双平台数据库 → backup/ 目录（含峰值汇总）"""
     _ensure_backup_dir()
     total = 0
-    for db_path, filename in [(DY_SELF_DB, "douyin_data.json"), (WB_SELF_DB, "weibo_data.json")]:
+    for db_path, filename in [(DY_SELF_DB, "douyin_data.json"), (WB_SELF_DB, "weibo_data.json"), (KS_SELF_DB, "kuaishou_data.json")]:
         db = sqlite3.connect(db_path)
         db.row_factory = sqlite3.Row
         rows = db.execute("SELECT word, date, rank, hot_value FROM topics ORDER BY date DESC, rank ASC").fetchall()
@@ -630,7 +635,7 @@ def push_backup():
         if count == 0:
             return "无数据，跳过"
         import subprocess
-        subprocess.run(["git", "add", "backup/douyin_data.json", "backup/weibo_data.json"], cwd=BASE_DIR, capture_output=True, timeout=20)
+        subprocess.run(["git", "add", "backup/douyin_data.json", "backup/weibo_data.json", "backup/kuaishou_data.json"], cwd=BASE_DIR, capture_output=True, timeout=20)
         subprocess.run(["git", "commit", "-m", f"[自动备份] {count}条(微博+抖音) {time.strftime('%m-%d %H:%M')}"],
                        cwd=BASE_DIR, capture_output=True, timeout=20)
         subprocess.run(["git", "push"], cwd=BASE_DIR, capture_output=True, timeout=60)
