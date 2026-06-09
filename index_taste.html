@@ -344,7 +344,11 @@ async function doSearch(){
     const div=document.getElementById('searchResults');
     if(!items.length){div.innerHTML='<div class="empty">未找到匹配话题</div>'}
     else if(searchMode==='weibo'){
-      div.innerHTML='<table style="margin-top:12px"><thead><tr><th>#</th><th>话题</th><th>最高排名</th><th>最后上榜</th></tr></thead><tbody>'+items.map((t,i)=>'<tr><td class="rank">'+(i+1)+'</td><td class="word"><a href="'+t.url+'" target="_blank">'+t.name+'</a></td><td style="font-weight:600">'+(t.peakRank && t.peakRank>0?'<span style="color:var(--wb)">#'+t.peakRank+'</span>':'—')+'</td><td style="font-size:12px;color:var(--ink-dim)">'+(t.lastTime||'')+'</td></tr>').join('')+'</tbody></table>';
+      // 微博结果：显示最高排名+上榜次数+首次+最近
+      div.innerHTML='<table style="margin-top:12px"><thead><tr><th>话题</th><th>最高</th><th>上榜</th><th>首次</th><th>最近</th></tr></thead><tbody>'+items.map(t=>{
+        const pk = t.peakRank && t.peakRank>0 ? '<span style="color:var(--wb);font-weight:700">#'+t.peakRank+'</span>' : '—';
+        return '<tr><td class="word"><a href="'+t.url+'" target="_blank">'+t.name+'</a></td><td style="font-weight:600">'+pk+'</td><td>'+(t.appearances||'—')+'天</td><td style="font-size:12px;color:var(--ink-dim)">'+(t.firstDate||'—')+'</td><td style="font-size:12px;color:var(--ink-dim)">'+(t.lastTime||'—')+'</td></tr>'
+      }).join('')+'</tbody></table>';
     }else if(items[0]&&items[0].appearances){
       div.innerHTML='<table style="margin-top:12px"><thead><tr><th>话题</th><th>上榜</th><th>最高</th><th>首次</th><th>最近</th></tr></thead><tbody>'+items.map(t=>{
         const hp=(t.history||[]).slice(0,5).map(h=>'<span class="'+(h.rank<=3?'top':'')+'">'+h.date.slice(5)+' #'+h.rank+'</span>').join('');

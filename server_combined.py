@@ -288,6 +288,19 @@ class Handler(BaseHTTPRequestHandler):
             query = params.get("q", [""])[0].strip()
             if not query:
                 return self._json([])
+            # 优先查本地历史库（快，全）
+            local_results = _search_db(os.path.join(BASE_DIR, "weibo_history.db"), query)
+            if local_results:
+                result = []
+                for i, r in enumerate(local_results[:50], 1):
+                    result.append({
+                        "rank": i, "name": r["word"], "lastTime": r["last_date"],
+                        "peakRank": r["best_rank"], "appearances": r["appearances"],
+                        "firstDate": r["first_date"],
+                        "url": "https://s.weibo.com/weibo?q=%23" + urllib.request.quote(r["word"]) + "%23"
+                    })
+                return self._json(result)
+            # 兜底：weibotop.cn API
             results = search_topic(query)[:50]
             # 从自建库获取峰值排名
             peak_map = {}
@@ -321,12 +334,11 @@ class Handler(BaseHTTPRequestHandler):
                 name = item[0]
                 last_time = item[1].replace(".0", "") if len(item) > 1 else ""
                 peak = peak_map.get(name)
-                entry = {
+                result.append({
                     "rank": i, "name": name, "lastTime": last_time,
-                    "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(name)}%23",
-                    "peakRank": peak
-                }
-                result.append(entry)
+                    "peakRank": peak,
+                    "url": "https://s.weibo.com/weibo?q=%23" + urllib.request.quote(name) + "%23"
+                })
             self._json(result)
 
         elif path == "/api/search-douyin":
