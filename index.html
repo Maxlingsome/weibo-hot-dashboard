@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>微博话题文案面板</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,system-ui,sans-serif;background:#f5f5f5;color:#333;line-height:1.6}
+header{background:linear-gradient(135deg,#e6162d,#c41230);color:#fff;padding:20px 24px;text-align:center}
+header h1{font-size:22px;margin-bottom:2px}
+header p{opacity:.8;font-size:13px}
+.container{max-width:900px;margin:0 auto;padding:16px}
+.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card h2{font-size:17px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e6162d}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:12px;margin-right:4px}
+.tag-hot{background:#ffe0e0;color:#c41230}
+.tag-pattern{background:#e0f0ff;color:#2563eb}
+.tag-net{background:#e0ffe0;color:#16a34a}
+.topics-table{width:100%;border-collapse:collapse}
+.topics-table td,.topics-table th{padding:8px 10px;text-align:left;border-bottom:1px solid #eee;font-size:13px}
+.topics-table th{color:#999;font-size:12px}
+.rank-num{font-weight:700;color:#e6162d;width:28px}
+.topic-link{color:#333;text-decoration:none}
+.topic-link:hover{color:#e6162d;text-decoration:underline}
+.hot-count{color:#999;font-size:12px;white-space:nowrap}
+.refresh-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12px;color:#999}
+.refresh-bar button{background:#e6162d;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px}
+.refresh-bar button:disabled{background:#999;cursor:not-allowed}
+.net-item{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid #eee;font-size:13px}
+.net-item:last-child{border:none}
+.net-source{color:#999;font-size:12px;min-width:160px}
+.insight{background:#fff9e6;border-left:3px solid #f59e0b;padding:10px 14px;border-radius:0 8px 8px 0;margin:6px 0;font-size:13px}
+.date-nav{display:flex;justify-content:center;gap:6px;margin:12px 0}
+.date-nav button{padding:6px 12px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px}
+.date-nav button.active{background:#e6162d;color:#fff;border-color:#e6162d}
+.empty-state{text-align:center;padding:50px 20px;color:#999}
+.case-list{list-style:none;font-size:13px}
+.case-list li{padding:6px 0;border-bottom:1px solid #eee}
+.case-list li:last-child{border:none}
+.case-date{color:#999;font-size:11px}
+/* 生成器 */
+.gen-box{background:linear-gradient(135deg,#1a1a2e,#16213e);color:#fff;border-radius:12px;padding:20px;margin-bottom:14px}
+.gen-box h2{color:#fff;border-bottom-color:rgba(255,255,255,.2);font-size:17px}
+.gen-box textarea{width:100%;height:72px;border-radius:8px;border:none;padding:10px;font-size:14px;resize:vertical;background:rgba(255,255,255,.1);color:#fff;margin-bottom:10px}
+.gen-box textarea::placeholder{color:rgba(255,255,255,.4)}
+.gen-box button{background:#e6162d;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer;width:100%}
+.gen-box button:hover{background:#c41230}
+.gen-box button:disabled{background:#666;cursor:not-allowed}
+.gen-result{margin-top:14px}
+.gen-result .dir{margin-bottom:10px;padding:10px;background:rgba(255,255,255,.05);border-radius:8px;font-size:13px}
+.gen-result .dir-name{font-weight:700;color:#e6162d;margin-bottom:3px}
+.gen-result .dir-cand{margin:3px 0;padding:3px 8px;background:rgba(255,255,255,.1);border-radius:4px;font-size:13px}
+.gen-result .dir-meta{font-size:11px;color:rgba(255,255,255,.5);margin-top:3px}
+.gen-result .top-pick{margin-top:14px;padding:14px;background:linear-gradient(135deg,rgba(230,22,45,.3),rgba(196,18,48,.3));border-radius:8px;border:1px solid rgba(230,22,45,.5)}
+.gen-error{color:#ff6b6b;padding:10px;background:rgba(255,0,0,.1);border-radius:8px;font-size:13px}
+/* 搜索 */
+.search-box{display:flex;gap:8px;margin-bottom:14px}
+.search-box input{flex:1;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px}
+.search-box button{background:#e6162d;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:14px;white-space:nowrap}
+.search-box button:disabled{background:#999}
+.search-results{margin-top:8px}
+.search-item{padding:8px 12px;border-bottom:1px solid #eee;font-size:13px}
+.search-item .author{color:#999;font-size:11px}
+/* tabs */
+.tabs{display:flex;gap:4px;margin-bottom:14px}
+.tabs button{padding:8px 16px;border:none;border-radius:8px 8px 0 0;background:#eee;cursor:pointer;font-size:13px}
+.tabs button.active{background:#e6162d;color:#fff}
+.tab-content{display:none}
+.tab-content.active{display:block}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 微博话题文案面板</h1>
+  <p>实时热搜 · 话题搜索 · AI 生成文案 · 每日学习</p>
+</header>
+
+<div class="container">
+  <!-- 标签页 -->
+  <div class="tabs">
+    <button class="active" onclick="switchTab('hot')">🔥 实时热搜</button>
+    <button onclick="switchTab('search')">🔍 话题搜索</button>
+    <button onclick="switchTab('generate')">✍️ 生成文案</button>
+    <button onclick="switchTab('learn')">📖 每日学习</button>
+  </div>
+
+  <!-- Tab 1: 实时热搜 -->
+  <div id="tab-hot" class="tab-content active">
+    <div class="card">
+      <div class="refresh-bar">
+        <span id="hotStatus">加载中...</span>
+        <button onclick="loadHotlist()" id="hotRefreshBtn">🔄 刷新</button>
+      </div>
+      <table class="topics-table" id="hotTable"></table>
+    </div>
+  </div>
+
+  <!-- Tab 2: 话题搜索 -->
+  <div id="tab-search" class="tab-content">
+    <div class="card">
+      <h2>🔍 搜索微博话题</h2>
+      <div class="search-box">
+        <input id="searchInput" placeholder="输入关键词，例如：985博士 间谍" onkeydown="if(event.key==='Enter')doSearch()">
+        <button id="searchBtn" onclick="doSearch()">搜索</button>
+      </div>
+      <div id="searchResults" class="search-results"></div>
+    </div>
+  </div>
+
+  <!-- Tab 3: 生成文案 -->
+  <div id="tab-generate" class="tab-content">
+    <div class="gen-box">
+      <h2>✍️ AI 生成话题文案</h2>
+      <textarea id="genInput" placeholder="输入事件，例如：洛克王国世界新代言人周杰伦上线，新版本加入开放世界玩法"></textarea>
+      <button id="genBtn" onclick="generate()">⚡ 生成话题文案</button>
+      <div id="genResult" class="gen-result"></div>
+    </div>
+  </div>
+
+  <!-- Tab 4: 每日学习 -->
+  <div id="tab-learn" class="tab-content">
+    <div class="date-nav" id="dateNav"></div>
+    <div id="content"></div>
+  </div>
+</div>
+
+<script>
+// ---- Tab switching ----
+function switchTab(name) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tabs button[onclick="switchTab('${name}')"]`).classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+// ---- Hot list with auto-refresh ----
+let hotTimer = null;
+
+async function loadHotlist() {
+  const status = document.getElementById('hotStatus');
+  const btn = document.getElementById('hotRefreshBtn');
+  status.textContent = '加载中...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/hotlist');
+    const items = await res.json();
+
+    if (items.length === 0 || items[0]?.error) {
+      status.textContent = items[0]?.error || '暂无数据';
+      document.getElementById('hotTable').innerHTML = '';
+    } else {
+      const now = new Date();
+      status.textContent = `更新时间 ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}  ·  每10分钟自动刷新`;
+      let html = '<tr><th>#</th><th>话题</th><th>热度</th></tr>';
+      items.forEach(item => {
+        const url = item.url || `https://s.weibo.com/weibo?q=%23${encodeURIComponent(item.title||'')}%23`;
+        html += `<tr>
+          <td class="rank-num">${item.rank||''}</td>
+          <td><a class="topic-link" href="${url}" target="_blank">${item.title||''}</a></td>
+          <td class="hot-count">${item.hot||''}</td>
+        </tr>`;
+      });
+      document.getElementById('hotTable').innerHTML = html;
+    }
+  } catch (e) {
+    status.textContent = '连接失败，请确保服务已启动';
+  }
+  btn.disabled = false;
+}
+
+// Auto refresh every 10 min
+function startAutoRefresh() {
+  if (hotTimer) clearInterval(hotTimer);
+  loadHotlist();
+  hotTimer = setInterval(loadHotlist, 600000); // 10 min
+}
+
+// ---- Search ----
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  const btn = document.getElementById('searchBtn');
+  const div = document.getElementById('searchResults');
+  if (!q) return;
+
+  btn.disabled = true;
+  btn.textContent = '搜索中...';
+  div.innerHTML = '';
+
+  try {
+    const res = await fetch(`/search?q=${encodeURIComponent(q)}`);
+    const items = await res.json();
+
+    if (items.length === 0) {
+      div.innerHTML = '<div class="empty-state"><p>未找到相关话题</p></div>';
+    } else if (items[0]?.error) {
+      div.innerHTML = `<div class="gen-error">${items[0].error}</div>`;
+    } else {
+      let html = `<h3 style="font-size:14px;margin-bottom:8px;color:#666">找到 ${items.length} 条相关话题</h3>`;
+      html += '<table class="topics-table"><tr><th>#</th><th>话题</th><th>最后上榜</th></tr>';
+      items.forEach((item, i) => {
+        const url = item.url || `https://s.weibo.com/weibo?q=%23${encodeURIComponent(item.name||'')}%23`;
+        html += `<tr>
+          <td class="rank-num">${i+1}</td>
+          <td><a class="topic-link" href="${url}" target="_blank">${item.name||item.text||''}</a></td>
+          <td style="font-size:11px;color:#999">${item.lastTime||item.time||''}</td>
+        </tr>`;
+      });
+      html += '</table>';
+      div.innerHTML = html;
+    }
+  } catch (e) {
+    div.innerHTML = '<div class="gen-error">搜索失败，请确保Chrome CDP已开启</div>';
+  }
+  btn.disabled = false;
+  btn.textContent = '搜索';
+}
+
+// ---- Generate ----
+async function generate() {
+  const input = document.getElementById('genInput').value.trim();
+  const btn = document.getElementById('genBtn');
+  const result = document.getElementById('genResult');
+
+  if (!input) { result.innerHTML = '<div class="gen-error">请输入事件描述</div>'; return; }
+
+  btn.disabled = true; btn.textContent = '⏳ 生成中...'; result.innerHTML = '';
+
+  try {
+    const res = await fetch('/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: input })
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      result.innerHTML = `<div class="gen-error">${data.error}</div>`;
+    } else if (data.directions) {
+      let html = '';
+      data.directions.forEach(d => {
+        html += `<div class="dir"><div class="dir-name">${d.name} ${d.score||''}</div>`;
+        (d.candidates||[]).forEach(c => html += `<div class="dir-cand">💬 ${c}</div>`);
+        html += `<div class="dir-meta">手法：${d.technique||''} · 情绪：${d.emotion||''}</div></div>`;
+      });
+      if (data.top_pick) html += `<div class="top-pick"><strong>🏆 最推荐：${data.top_pick}</strong><br><span style="font-size:12px;opacity:.7">${data.reason||''}</span></div>`;
+      result.innerHTML = html;
+    } else {
+      result.innerHTML = `<div style="white-space:pre-wrap;padding:10px;background:rgba(255,255,255,.05);border-radius:8px">${data.raw||JSON.stringify(data,null,2)}</div>`;
+    }
+  } catch (e) {
+    result.innerHTML = '<div class="gen-error">连接失败，请确保服务已启动</div>';
+  }
+  btn.disabled = false; btn.textContent = '⚡ 生成话题文案';
+}
+
+// ---- Daily Learning ----
+async function loadData(date) {
+  try {
+    const url = date ? `archive/${date}.json` : 'data.json';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('no data');
+    return await res.json();
+  } catch { return null; }
+}
+
+function render(data) {
+  const content = document.getElementById('content');
+  if (!data) {
+    content.innerHTML = '<div class="empty-state"><p>暂无数据</p></div>';
+    return;
+  }
+  let html = '';
+
+  if (data.douyin_hot?.length) {
+    html += '<div class="card"><h2>🎵 抖音热搜 Top 10</h2><table class="topics-table">';
+    data.douyin_hot.forEach((h,i) => html += `<tr><td class="rank-num">${i+1}</td><td>${h.title||''}</td><td class="hot-count">${h.hot||''}</td></tr>`);
+    html += '</table></div>';
+  }
+
+  if (data.topics?.length) {
+    html += '<div class="card"><h2>🔍 深入分析的话题</h2>';
+    data.topics.forEach(t => {
+      html += `<div style="margin:6px 0;padding:8px;background:#f9f9f9;border-radius:8px">
+        <strong>#${t.topic||''}</strong> <span class="tag tag-pattern">${t.pattern||''}</span>
+        <span style="font-size:12px;color:#666">${t.content_type||''}</span>
+        <div style="margin-top:3px;font-size:13px">${t.insight||''}</div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  if (data.net_sense?.length) {
+    html += '<div class="card"><h2>🎯 今日网感</h2>';
+    data.net_sense.forEach(n => html += `<div class="net-item"><div class="net-source">${n.source||''}</div><div><span class="tag tag-net">${n.platform||'微博'}</span>${n.insight||''}</div></div>`);
+    html += '</div>';
+  }
+
+  if (data.learnings?.length) {
+    html += '<div class="card"><h2>📝 学习了什么</h2>';
+    data.learnings.forEach(l => html += `<div class="insight">💡 ${l}</div>`);
+    html += '</div>';
+  }
+
+  if (data.hot_list?.length) {
+    html += '<div class="card"><h2>🔥 当日热搜 Top 10</h2><table class="topics-table">';
+    data.hot_list.forEach((h,i) => {
+      const url = `https://s.weibo.com/weibo?q=%23${encodeURIComponent(h.title||'')}%23`;
+      html += `<tr><td class="rank-num">${i+1}</td><td><a class="topic-link" href="${url}" target="_blank">${h.title||''}</a></td><td class="hot-count">${h.hot||''}</td></tr>`;
+    });
+    html += '</table></div>';
+  }
+
+  if (data.case_library?.length) {
+    html += '<div class="card"><h2>📚 网感案例库</h2><ul class="case-list">';
+    data.case_library.forEach(c => html += `<li><span class="case-date">${c.date||''}</span> ${c.source||''} → <strong>${c.insight||''}</strong></li>`);
+    html += '</ul></div>';
+  }
+
+  content.innerHTML = html;
+}
+
+async function initLearn() {
+  let data = await loadData();
+  if (data) { document.title = `微博话题文案 - ${data.date||''}`; render(data); }
+  try {
+    const res = await fetch('archive/index.json');
+    if (res.ok) {
+      const dates = await res.json();
+      const nav = document.getElementById('dateNav');
+      dates.forEach(d => {
+        const btn = document.createElement('button');
+        btn.textContent = d; btn.onclick = async () => {
+          document.querySelectorAll('.date-nav button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active'); render(await loadData(btn.textContent));
+        };
+        nav.appendChild(btn);
+      });
+    }
+  } catch {}
+}
+
+// ---- Init ----
+startAutoRefresh();
+initLearn();
+</script>
+</body>
+</html>

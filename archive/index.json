@@ -1,0 +1,89 @@
+{
+  "updated": "2026-06-09",
+  "entries": [
+    {
+      "date": "2026-05-25",
+      "file": "2026-05-25.json",
+      "douyin_count": 0,
+      "topic_count": 5,
+      "hot_count": 10
+    },
+    {
+      "date": "2026-05-26",
+      "file": "2026-05-26.json",
+      "douyin_count": 20,
+      "topic_count": 8,
+      "hot_count": 30
+    },
+    {
+      "date": "2026-05-27",
+      "file": "2026-05-27.json",
+      "douyin_count": 49,
+      "topic_count": 8,
+      "hot_count": 29
+    },
+    {
+      "date": "2026-05-28",
+      "file": "2026-05-28.json",
+      "douyin_count": 49,
+      "topic_count": 8,
+      "hot_count": 8
+    },
+    {
+      "date": "2026-05-29",
+      "file": "2026-05-29.json",
+      "douyin_count": 10,
+      "topic_count": 8,
+      "hot_count": 10
+    },
+    {
+      "date": "2026-05-31",
+      "file": "2026-05-31.json",
+      "douyin_count": 30,
+      "topic_count": 8,
+      "hot_count": 10
+    },
+    {
+      "date": "2026-06-02",
+      "file": "2026-06-02.json",
+      "douyin_count": 38,
+      "topic_count": 8,
+      "hot_count": 41
+    },
+    {
+      "date": "2026-06-04",
+      "file": "2026-06-04.json",
+      "douyin_count": 50,
+      "topic_count": 8,
+      "hot_count": 51
+    },
+    {
+      "date": "2026-06-05",
+      "file": "2026-06-05.json",
+      "douyin_count": 10,
+      "topic_count": 8,
+      "hot_count": 20
+    },
+    {
+      "date": "2026-06-06",
+      "file": "2026-06-06.json",
+      "douyin_count": 9,
+      "topic_count": 8,
+      "hot_count": 14
+    },
+    {
+      "date": "2026-06-08",
+      "file": "2026-06-08.json",
+      "douyin_count": 10,
+      "topic_count": 8,
+      "hot_count": 15
+    },
+    {
+      "date": "2026-06-09",
+      "file": "2026-06-09.json",
+      "douyin_count": 10,
+      "topic_count": 8,
+      "hot_count": 10
+    }
+  ]
+}
