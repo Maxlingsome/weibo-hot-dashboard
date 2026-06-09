@@ -197,6 +197,7 @@ def fetch_kuaishou_hot():
             html = r.read().decode()
         match = re.search(r'window\.__APOLLO_STATE__=(.*?);\(function\(\)', html, re.DOTALL)
         if not match:
+            print(f"[快手] 无 __APOLLO_STATE__，HTML长度: {len(html)}，前100字: {html[:100]}")
             return []
         data = json.loads(match.group(1))
         client = data.get("defaultClient", {})
