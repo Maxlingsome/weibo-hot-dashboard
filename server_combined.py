@@ -157,9 +157,35 @@ def fetch_weibo_hot():
         print(f"[微博] 抓取失败: {e}")
         return []
 
+def fetch_weibo_wenyu():
+    """抓取微博文娱榜"""
+    try:
+        url = "https://weibo.com/ajax/statuses/hot_band?band_id=wen_yu"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Referer": "https://weibo.com/"
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        items = data.get("data", {}).get("band_list", [])
+        result = []
+        for i, item in enumerate(items, 1):
+            word = item.get("word", "")
+            num = item.get("num", 0)
+            hot_str = f"{num/10000:.0f}万" if num >= 10000 else str(num)
+            result.append({
+                "rank": i, "title": word, "hot": hot_str, "hot_value": num,
+                "label": item.get("subject_label", ""), "note": item.get("note", ""),
+                "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(word)}%23"
+            })
+        return result
+    except Exception as e:
+        print(f"[文娱榜] 抓取失败: {e}")
+        return []
+
 
 # ---- 内存缓存 ----
-CACHE = {"weibo": [], "douyin": [], "weibo_time": 0, "douyin_time": 0}
+CACHE = {"weibo": [], "douyin": [], "wenyu": [], "weibo_time": 0, "douyin_time": 0, "wenyu_time": 0}
 cache_lock = threading.Lock()
 
 
@@ -190,6 +216,19 @@ def poll_douyin():
                 print(f"[抖音] {len(items)} 条热搜（已保存）")
         except Exception as e:
             print(f"[抖音] 轮询异常: {e}")
+        time.sleep(180)
+
+def poll_wenyu():
+    while True:
+        try:
+            items = fetch_weibo_wenyu()
+            if items:
+                with cache_lock:
+                    CACHE["wenyu"] = items
+                    CACHE["wenyu_time"] = time.time()
+                print(f"[文娱榜] {len(items)} 条")
+        except Exception as e:
+            print(f"[文娱榜] 轮询异常: {e}")
         time.sleep(180)
 
 
@@ -274,6 +313,11 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/douyin":
             with cache_lock:
                 data = list(CACHE["douyin"])
+            self._json(data)
+
+        elif path == "/api/wenyu":
+            with cache_lock:
+                data = list(CACHE["wenyu"])
             self._json(data)
 
         elif path == "/api/all":
@@ -562,7 +606,7 @@ def main():
 
     # 首次抓取
     print("首次抓取中...")
-    for name, fn in [("微博", fetch_weibo_hot), ("抖音", fetch_douyin_hot)]:
+    for name, fn in [("微博", fetch_weibo_hot), ("抖音", fetch_douyin_hot), ("文娱", fetch_weibo_wenyu)]:
         try:
             items = fn()
             if items:
@@ -570,9 +614,12 @@ def main():
                     if name == "微博":
                         CACHE["weibo"] = items
                         CACHE["weibo_time"] = time.time()
-                    else:
+                    elif name == "抖音":
                         CACHE["douyin"] = items
                         CACHE["douyin_time"] = time.time()
+                    else:
+                        CACHE["wenyu"] = items
+                        CACHE["wenyu_time"] = time.time()
                 print(f"  [{name}] {len(items)} 条")
         except Exception as e:
             print(f"  [{name}] 失败: {e}")
@@ -580,6 +627,7 @@ def main():
     # 后台轮询 + 备份
     threading.Thread(target=poll_weibo, daemon=True).start()
     threading.Thread(target=poll_douyin, daemon=True).start()
+    threading.Thread(target=poll_wenyu, daemon=True).start()
     threading.Thread(target=backup_loop, daemon=True).start()
 
     # 首次备份（1分钟后，等首批数据入库）
