@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>热搜面板</title>
+<style>
+/* === Design: Ethereal Glass × Asymmetrical Bento === */
+:root {
+  --bg: #050508;
+  --surface: rgba(255,255,255,.03);
+  --surface-hover: rgba(255,255,255,.06);
+  --border: rgba(255,255,255,.06);
+  --border-strong: rgba(255,255,255,.1);
+  --ink: #f4f4f5;
+  --ink-dim: rgba(255,255,255,.55);
+  --ink-muted: rgba(255,255,255,.3);
+  --wb: #ff3b5c;
+  --wb-glow: rgba(255,59,92,.15);
+  --dy: #ff5e82;
+  --dy-glow: rgba(255,94,130,.12);
+  --amber: #fbbf24;
+  --radius: 18px;
+  --radius-inner: calc(var(--radius) - 6px);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html{background:var(--bg)}
+body{
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+/* === Background Texture === */
+body::before{
+  content: '';
+  position: fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(255,59,92,.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(255,94,130,.04) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 60% at 50% 50%, rgba(255,255,255,.01) 0%, transparent 70%);
+}
+
+/* === Layout === */
+.container{max-width:960px;margin:0 auto;padding:0 20px 80px;position:relative;z-index:1}
+
+/* === Header === */
+header{padding:32px 0 24px;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px}
+header .brand{font-size:20px;font-weight:800;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+header .brand-dots{display:flex;gap:5px}
+header .brand-dots span{width:7px;height:7px;border-radius:50%}
+header .brand-dots .w{background:var(--wb);box-shadow:0 0 8px var(--wb-glow)}
+header .brand-dots .d{background:var(--dy);box-shadow:0 0 8px var(--dy-glow)}
+header .live{font-size:11px;color:var(--ink-muted);font-weight:500;letter-spacing:.04em;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+header .live .pulse{width:5px;height:5px;border-radius:50%;background:#22c55e;animation:pulse 2.5s ease-in-out infinite;box-shadow:0 0 6px rgba(34,197,94,.4)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.85)}}
+
+/* === Tab Bar - Floating Glass Pill === */
+.tab-bar{
+  display:flex;gap:2px;margin:0 auto 24px;width:fit-content;
+  background:rgba(255,255,255,.04);backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--border-strong);
+  border-radius:100px;padding:4px;position:sticky;top:16px;z-index:100;
+}
+.tab-bar button{
+  padding:8px 18px;border:none;cursor:pointer;font-size:12.5px;font-weight:600;
+  color:var(--ink-dim);background:transparent;border-radius:100px;
+  transition:all .25s var(--ease);font-family:inherit;white-space:nowrap;
+}
+.tab-bar button.active{background:rgba(255,255,255,.1);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.tab-bar button:hover:not(.active){color:rgba(255,255,255,.7)}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* === Stats Row - Asymmetrical Bento === */
+.stats-grid{display:grid;grid-template-columns:1.2fr .8fr 1fr;gap:10px;margin-bottom:16px}
+@media(max-width:640px){.stats-grid{grid-template-columns:1fr 1fr}}
+.stat-card{
+  position:relative;overflow:hidden;
+  /* Double-Bezel */
+  background:linear-gradient(135deg,rgba(255,255,255,.04),rgba(255,255,255,.02));
+  border:1px solid var(--border);
+  border-radius:var(--radius);padding:16px 18px;
+  transition:all .3s var(--ease);
+}
+.stat-card:hover{background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.03));border-color:var(--border-strong)}
+.stat-card .label{font-size:11px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:500;margin-bottom:4px}
+.stat-card .value{font-size:30px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.stat-card .value.wb{color:var(--wb)}
+.stat-card .value.dy{color:var(--dy)}
+.stat-card .sub{font-size:12px;color:var(--ink-dim);margin-top:2px}
+
+/* === Card (Double-Bezel) === */
+.card-outer{
+  background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.04);
+  border-radius:var(--radius);padding:2px;margin-bottom:12px;
+  transition:border-color .3s var(--ease);
+}
+.card-outer:hover{border-color:var(--border-strong)}
+.card-inner{
+  background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.015));
+  border:1px solid rgba(255,255,255,.04);
+  border-radius:calc(var(--radius) - 2px);
+  padding:18px;
+}
+.card-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.card-header h2{font-size:14px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+.card-header .accent-dot{width:5px;height:5px;border-radius:50%;display:inline-block}
+.card-header .accent-dot.w{background:var(--wb);box-shadow:0 0 6px var(--wb-glow)}
+.card-header .accent-dot.d{background:var(--dy);box-shadow:0 0 6px var(--dy-glow)}
+.card-header .meta{font-size:11px;color:var(--ink-muted);font-weight:400}
+
+/* === Table === */
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{padding:6px 8px 8px;text-align:left;font-size:10.5px;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+tbody tr{transition:background .2s;animation:rowIn .5s var(--ease) backwards}
+tbody tr:nth-child(1){animation-delay:0s}
+tbody tr:nth-child(2){animation-delay:.02s}
+tbody tr:nth-child(3){animation-delay:.04s}
+tbody tr:nth-child(4){animation-delay:.06s}
+tbody tr:nth-child(5){animation-delay:.08s}
+tbody tr:nth-child(6){animation-delay:.1s}
+tbody tr:nth-child(7){animation-delay:.12s}
+tbody tr:nth-child(8){animation-delay:.14s}
+tbody tr:nth-child(9){animation-delay:.16s}
+tbody tr:nth-child(10){animation-delay:.18s}
+@keyframes rowIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+tbody td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.03);vertical-align:middle}
+tbody tr:hover td{background:rgba(255,255,255,.03)}
+.rank{font-weight:700;font-variant-numeric:tabular-nums;width:32px;text-align:center;font-size:13px}
+.rank.wb-top{color:var(--wb)}
+.rank.dy-top{color:var(--dy)}
+.word a{color:var(--ink);text-decoration:none;transition:color .2s}
+.word a:hover{color:var(--wb)}
+a.dy-link:hover{color:var(--dy)!important}
+.hot-val{color:var(--ink-dim);font-size:12px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* === Search === */
+.search-row{display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:10px}
+.search-row input{
+  width:100%;padding:10px 14px;
+  background:rgba(255,255,255,.04);border:1px solid var(--border-strong);border-radius:100px;
+  color:var(--ink);font-size:14px;font-family:inherit;outline:none;
+  transition:all .25s var(--ease);
+}
+.search-row input:focus{border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.06);box-shadow:0 0 0 3px rgba(255,255,255,.03)}
+.search-row button{
+  padding:10px 24px;background:#fff;color:#000;border:none;border-radius:100px;
+  font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;
+  transition:all .2s var(--ease);
+}
+.search-row button:hover{transform:scale(1.02);box-shadow:0 4px 16px rgba(255,255,255,.1)}
+.search-row button:active{transform:scale(.98)}
+.search-row button:disabled{opacity:.4;transform:none;box-shadow:none}
+.search-toggle-wrap{display:inline-flex;gap:1px;background:rgba(255,255,255,.06);border-radius:100px;padding:2px;margin-left:6px}
+.search-toggle-wrap button{padding:4px 14px;border:none;border-radius:100px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:var(--ink-dim);font-family:inherit;transition:all .2s var(--ease)}
+.search-toggle-wrap button.active{background:rgba(255,255,255,.12);color:#fff}
+.search-hint{font-size:11px;color:var(--ink-muted);margin-bottom:8px}
+
+/* === Gen Card === */
+.gen-card .card-inner{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.015))}
+.gen-card textarea{
+  width:100%;height:80px;background:rgba(255,255,255,.04);border:1px solid var(--border-strong);
+  border-radius:12px;padding:12px;color:#fff;font-size:14px;resize:vertical;
+  font-family:inherit;outline:none;margin-bottom:10px;transition:all .25s var(--ease);
+}
+.gen-card textarea:focus{border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.06)}
+.gen-card .btn-gen{
+  width:100%;padding:12px;background:#fff;color:#000;border:none;border-radius:100px;
+  font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;
+  transition:all .2s var(--ease);
+}
+.gen-card .btn-gen:hover{box-shadow:0 4px 20px rgba(255,255,255,.15);transform:scale(1.01)}
+.gen-card .btn-gen:active{transform:scale(.98)}
+.gen-card .btn-gen:disabled{opacity:.3;transform:none;box-shadow:none}
+.gen-dir{padding:10px 12px;background:rgba(255,255,255,.03);border-radius:10px;margin:8px 0;font-size:13px}
+.gen-dir .dir-name{font-weight:700;color:var(--dy);margin-bottom:3px}
+.gen-dir .dir-cand{padding:4px 10px;background:rgba(255,255,255,.05);border-radius:6px;margin:3px 0}
+.gen-dir .dir-meta{font-size:11px;color:var(--ink-muted)}
+.gen-top{background:linear-gradient(135deg,var(--dy-glow),var(--wb-glow));border:1px solid rgba(255,94,130,.2);padding:12px;border-radius:10px;margin-top:10px}
+
+/* === Learn === */
+.insight{padding:12px 14px;background:rgba(251,191,36,.06);border-left:2px solid var(--amber);border-radius:0 10px 10px 0;margin:6px 0;font-size:13px}
+.date-nav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px}
+.date-nav button{padding:5px 12px;border:1px solid var(--border-strong);border-radius:100px;background:transparent;color:var(--ink-dim);cursor:pointer;font-size:12px;font-family:inherit;transition:all .2s var(--ease)}
+.date-nav button.active{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.2)}
+.tag{display:inline-block;padding:2px 7px;border-radius:100px;font-size:10px;font-weight:600;margin-right:3px;letter-spacing:.02em}
+.tag-wb{background:var(--wb-glow);color:var(--wb)}
+.tag-dy{background:var(--dy-glow);color:var(--dy)}
+.tag-pattern{background:rgba(59,130,246,.1);color:#60a5fa}
+.topic-card{padding:12px;background:rgba(255,255,255,.02);border-radius:10px;margin:6px 0;font-size:13px;border:1px solid var(--border)}
+.empty{text-align:center;padding:50px 16px;color:var(--ink-muted);font-size:13px}
+.hist-pills{display:flex;gap:3px;flex-wrap:wrap;max-width:240px}
+.hist-pills span{display:inline-block;padding:2px 6px;border-radius:100px;font-size:10px;background:rgba(255,255,255,.04);color:var(--ink-dim)}
+.hist-pills span.top{background:var(--dy-glow);color:var(--dy)}
+
+footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)}
+
+/* === Responsive === */
+@media(max-width:600px){
+  .container{padding:0 12px 40px}
+  .tab-bar{position:static;margin-bottom:16px}
+  .tab-bar button{padding:7px 10px;font-size:11px}
+  .tab-bar button .emoji{font-size:13px}
+  .card-inner{padding:12px}
+  .stat-card .value{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+<header>
+  <div class="brand">
+    <div class="brand-dots"><span class="w"></span><span class="d"></span></div>
+    热搜面板
+  </div>
+  <div class="live"><span class="pulse"></span>实时监控</div>
+</header>
+
+<!-- Floating Tab Bar -->
+<div class="tab-bar">
+  <button class="active" onclick="switchTab('weibo')">微博热搜</button>
+  <button onclick="switchTab('douyin')">抖音热搜</button>
+  <button onclick="switchTab('search')">话题搜索</button>
+  <button onclick="switchTab('generate')">AI 文案</button>
+  <button onclick="switchTab('learn')">每日学习</button>
+</div>
+
+<!-- Weibo -->
+<div id="tab-weibo" class="tab-content active">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">微博热搜</div><div class="value wb" id="wbCount">—</div><div class="sub">实时 Top 50</div></div>
+    <div class="stat-card"><div class="label">更新时间</div><div class="value" style="font-size:20px" id="wbTime">—</div></div>
+    <div class="stat-card" style="grid-column:span 1"><div class="label">Top 1</div><div class="value" style="font-size:16px;line-height:1.3" id="wbTop1">—</div></div>
+  </div>
+  <div class="card-outer"><div class="card-inner">
+    <div class="card-header"><h2><span class="accent-dot w"></span>微博热搜榜单</h2><span class="meta">每 3 分钟自动更新</span></div>
+    <table><thead><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr></thead><tbody id="wbBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table>
+  </div></div>
+</div>
+
+<!-- Douyin -->
+<div id="tab-douyin" class="tab-content">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">抖音热搜</div><div class="value dy" id="dyCount">—</div><div class="sub">实时 Top 50</div></div>
+    <div class="stat-card"><div class="label">更新时间</div><div class="value" style="font-size:20px" id="dyTime">—</div></div>
+    <div class="stat-card" style="grid-column:span 1"><div class="label">Top 1</div><div class="value" style="font-size:16px;line-height:1.3" id="dyTop1">—</div></div>
+  </div>
+  <div class="card-outer"><div class="card-inner">
+    <div class="card-header"><h2><span class="accent-dot d"></span>抖音热搜榜单</h2><span class="meta">每 3 分钟自动更新</span></div>
+    <table><thead><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr></thead><tbody id="dyBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table>
+  </div></div>
+</div>
+
+<!-- Search -->
+<div id="tab-search" class="tab-content">
+  <div class="card-outer"><div class="card-inner">
+    <div class="card-header"><h2>话题搜索 <span class="search-toggle-wrap"><button id="stWb" class="active" onclick="switchSearch('weibo')">微博</button><button id="stDy" onclick="switchSearch('douyin')">抖音</button></span></h2></div>
+    <div class="search-hint" id="searchHint">搜索微博历史话题（含过往上榜记录）</div>
+    <div class="search-row"><input id="searchInput" placeholder="输入关键词…" onkeydown="if(event.key==='Enter')doSearch()"><button id="searchBtn" onclick="doSearch()">搜索</button></div>
+    <div id="searchResults"></div>
+  </div></div>
+</div>
+
+<!-- Generate -->
+<div id="tab-generate" class="tab-content">
+  <div class="card-outer gen-card"><div class="card-inner">
+    <div class="card-header"><h2>AI 生成话题文案</h2></div>
+    <textarea id="genInput" placeholder="输入事件，如：洛克王国世界新代言人周杰伦上线，新版本加入开放世界玩法"></textarea>
+    <button class="btn-gen" id="genBtn" onclick="doGenerate()">生成文案</button>
+    <div id="genResult"></div>
+  </div></div>
+</div>
+
+<!-- Learn -->
+<div id="tab-learn" class="tab-content">
+  <div class="date-nav" id="dateNav"></div>
+  <div id="learnContent"></div>
+</div>
+
+<footer>weibotop.cn &middot; douyin.com &middot; 自动备份至 GitHub</footer>
+</div>
+
+<script>
+// === Tab Switch ===
+const TABS=['weibo','douyin','search','generate','learn'];
+function switchTab(name){
+  document.querySelectorAll('.tab-bar button').forEach((b,i)=>b.classList.toggle('active',i===TABS.indexOf(name)));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+// === Load Weibo ===
+async function loadWeibo(){
+  try{
+    const items=await fetch('/api/weibo').then(r=>r.json());
+    if(!items.length)return;
+    const d=new Date(); const ts=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+    document.getElementById('wbCount').textContent=items.length;
+    document.getElementById('wbTime').textContent=ts;
+    document.getElementById('wbTop1').textContent=items[0]?.title||'—';
+    document.getElementById('wbBody').innerHTML=items.map(i=>
+      '<tr><td class="rank'+(i.rank<=3?' wb-top':'')+'">'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td><td class="hot-val">'+i.hot+'</td></tr>'
+    ).join('');
+  }catch(e){}
+}
+// === Load Douyin ===
+async function loadDouyin(){
+  try{
+    const items=await fetch('/api/douyin').then(r=>r.json());
+    if(!items.length)return;
+    const d=new Date(); const ts=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+    document.getElementById('dyCount').textContent=items.length;
+    document.getElementById('dyTime').textContent=ts;
+    document.getElementById('dyTop1').textContent=items[0]?.title||'—';
+    document.getElementById('dyBody').innerHTML=items.map(i=>
+      '<tr><td class="rank'+(i.rank<=3?' dy-top':'')+'">'+i.rank+'</td><td class="word"><a class="dy-link" href="'+i.url+'" target="_blank">'+i.title+'</a></td><td class="hot-val">'+i.hot+'</td></tr>'
+    ).join('');
+  }catch(e){}
+}
+
+// === Search ===
+let searchMode='weibo';
+function switchSearch(m){
+  searchMode=m;
+  document.getElementById('stWb').classList.toggle('active',m==='weibo');
+  document.getElementById('stDy').classList.toggle('active',m==='douyin');
+  document.getElementById('searchHint').textContent=m==='weibo'?'搜索微博历史话题（含过往上榜记录）':'搜索抖音历史话题（自建+社区存档）';
+  document.getElementById('searchResults').innerHTML='';
+}
+async function doSearch(){
+  const q=document.getElementById('searchInput').value.trim();if(!q)return;
+  const btn=document.getElementById('searchBtn');btn.disabled=true;btn.textContent='搜索中…';
+  const api=searchMode==='douyin'?'/api/search-douyin':'/api/search';
+  try{
+    const items=await fetch(api+'?q='+encodeURIComponent(q)).then(r=>r.json());
+    const div=document.getElementById('searchResults');
+    if(!items.length){div.innerHTML='<div class="empty">未找到匹配话题</div>'}
+    else if(searchMode==='weibo'){
+      div.innerHTML='<table style="margin-top:12px"><thead><tr><th>#</th><th>话题</th><th>最后上榜</th></tr></thead><tbody>'+items.map((t,i)=>'<tr><td class="rank">'+(i+1)+'</td><td class="word"><a href="'+t.url+'" target="_blank">'+t.name+'</a></td><td style="font-size:12px;color:var(--ink-dim)">'+(t.lastTime||'')+'</td></tr>').join('')+'</tbody></table>';
+    }else if(items[0]&&items[0].appearances){
+      div.innerHTML='<table style="margin-top:12px"><thead><tr><th>话题</th><th>上榜</th><th>最高</th><th>首次</th><th>最近</th></tr></thead><tbody>'+items.map(t=>{
+        const hp=(t.history||[]).slice(0,5).map(h=>'<span class="'+(h.rank<=3?'top':'')+'">'+h.date.slice(5)+' #'+h.rank+'</span>').join('');
+        return '<tr><td class="word"><a class="dy-link" href="https://www.douyin.com/search/'+encodeURIComponent(t.word)+'" target="_blank">'+t.word+'</a></td><td style="font-weight:600">'+t.appearances+'天</td><td>'+(t.best_rank<=3?'<span style="color:var(--dy);font-weight:700">'+t.best_rank+'</span>':t.best_rank)+'</td><td style="font-size:12px;color:var(--ink-dim)">'+t.first_date+'</td><td style="font-size:12px;color:var(--ink-dim)">'+t.last_date+'</td></tr>'
+      }).join('')+'</tbody></table>';
+    }else{
+      div.innerHTML='<p style="font-size:11px;color:var(--ink-muted);margin:12px 0 4px">实时热搜匹配</p><table><thead><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr></thead><tbody>'+items.map(t=>'<tr><td class="rank'+(t.rank<=3?' dy-top':'')+'">'+(t.rank||'')+'</td><td class="word"><a class="dy-link" href="https://www.douyin.com/search/'+encodeURIComponent(t.word||t.title||'')+'" target="_blank">'+(t.word||t.title||'')+'</a></td><td class="hot-val">'+(t.hot||'')+'</td></tr>').join('')+'</tbody></table>';
+    }
+  }catch(e){document.getElementById('searchResults').innerHTML='<div class="empty">搜索失败</div>'}
+  btn.disabled=false;btn.textContent='搜索';
+}
+
+// === Generate ===
+async function doGenerate(){
+  const input=document.getElementById('genInput').value.trim();
+  const btn=document.getElementById('genBtn'),div=document.getElementById('genResult');
+  if(!input){div.innerHTML='<p style="color:#f87171;font-size:13px">请输入事件描述</p>';return}
+  btn.disabled=true;btn.textContent='生成中…';div.innerHTML='';
+  try{
+    const data=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event:input})}).then(r=>r.json());
+    if(data.error){div.innerHTML='<p style="color:#f87171;font-size:13px">'+data.error+'</p>'}
+    else if(data.directions){
+      let h='';data.directions.forEach(d=>{h+='<div class="gen-dir"><div class="dir-name">'+d.name+' '+d.score+'</div>';d.candidates.forEach(c=>h+='<div class="dir-cand">'+c+'</div>');h+='<div class="dir-meta">'+d.technique+' / '+d.emotion+'</div></div>'});
+      if(data.top_pick)h+='<div class="gen-top"><strong>'+data.top_pick+'</strong><br><span style="font-size:12px;opacity:.6">'+data.reason+'</span></div>';
+      div.innerHTML=h;
+    }else{div.innerHTML='<pre style="font-size:12px;opacity:.7;white-space:pre-wrap">'+JSON.stringify(data,null,2)+'</pre>'}
+  }catch(e){div.innerHTML='<p style="color:#f87171;font-size:13px">连接失败</p>'}
+  btn.disabled=false;btn.textContent='生成文案';
+}
+
+// === Daily Learn ===
+async function initLearn(){
+  try{
+    const data=await fetch('/data.json').then(r=>r.json());
+    document.title='热搜面板 · '+data.date;renderLearn(data);
+    const idx=await fetch('/archive/index.json').then(r=>r.json());
+    const nav=document.getElementById('dateNav');
+    (idx.entries||[]).forEach(e=>{const btn=document.createElement('button');btn.textContent=e.date;btn.onclick=async()=>{document.querySelectorAll('.date-nav button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');try{renderLearn(await fetch('/archive/'+e.date+'.json').then(r=>r.json()))}catch(ex){}};nav.appendChild(btn)});
+  }catch(e){}
+}
+function renderLearn(data){
+  if(!data)return;let h='';
+  if(data.douyin_hot&&data.douyin_hot.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2><span class="accent-dot d"></span>抖音热搜 Top 10</h2></div><table>';data.douyin_hot.forEach((t,i)=>h+='<tr><td class="rank dy-top">'+(i+1)+'</td><td>'+t.title+'</td><td class="hot-val">'+t.hot+'</td></tr>');h+='</table></div></div>'}
+  if(data.topics&&data.topics.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2>深入分析</h2></div>';data.topics.forEach(t=>h+='<div class="topic-card"><strong>#'+(t.topic||'')+'</strong> <span class="tag tag-pattern">'+(t.pattern||'')+'</span> <span style="color:var(--ink-dim);font-size:12px">'+(t.content_type||'')+'</span><div style="margin-top:4px">'+(t.insight||'')+'</div></div>');h+='</div></div>'}
+  if(data.net_sense&&data.net_sense.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2>今日网感</h2></div>';data.net_sense.forEach(n=>h+='<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span class="tag '+(n.platform==='抖音'?'tag-dy':'tag-wb')+'">'+(n.platform||'微博')+'</span> <span style="color:var(--ink-dim);font-size:12px">'+(n.source||'')+'</span> &rarr; '+(n.insight||'')+'</div>');h+='</div></div>'}
+  if(data.learnings&&data.learnings.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2>学到的</h2></div>';data.learnings.forEach(l=>h+='<div class="insight">'+l+'</div>');h+='</div></div>'}
+  if(data.hot_list&&data.hot_list.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2><span class="accent-dot w"></span>微博热搜 Top 10</h2></div><table>';data.hot_list.forEach((t,i)=>{const u='https://s.weibo.com/weibo?q=%23'+encodeURIComponent(t.title||'')+'%23';h+='<tr><td class="rank wb-top">'+(i+1)+'</td><td class="word"><a href="'+u+'" target="_blank">'+(t.title||'')+'</a></td><td class="hot-val">'+(t.hot||'')+'</td></tr>'});h+='</table></div></div>'}
+  if(data.case_library&&data.case_library.length){h+='<div class="card-outer"><div class="card-inner"><div class="card-header"><h2>案例库</h2></div>';data.case_library.forEach(c=>h+='<div style="padding:3px 0;font-size:13px"><span style="color:var(--ink-muted);font-size:10px">'+(c.date||'')+'</span> '+(c.source||'')+' &rarr; <strong>'+(c.insight||'')+'</strong></div>');h+='</div></div>'}
+  document.getElementById('learnContent').innerHTML=h||'<div class="empty">暂无数据</div>';
+}
+
+// === Init ===
+loadWeibo();loadDouyin();initLearn();
+setInterval(()=>{loadWeibo();loadDouyin()},180000);
+</script>
+</body>
+</html>
