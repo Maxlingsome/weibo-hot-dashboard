@@ -1,5 +1,4 @@
 # weibo-dashboard deployment
-# 线上部署忽略以下文件
 __pycache__/
 *.pyc
 server.log
@@ -7,3 +6,5 @@ hot_cache.json
 .DS_Store
 .env
 railway.toml
+douyin_self.db
+douyin_self.db-*

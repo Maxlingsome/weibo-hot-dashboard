@@ -1,1 +1,1 @@
-web: python server_deploy.py
+web: python server_combined.py

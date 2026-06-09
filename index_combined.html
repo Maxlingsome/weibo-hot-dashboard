@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>热搜面板 · 微博+抖音</title>
+<style>
+:root {
+  --wb: #e6162d; --dy: #fe2c55;
+  --bg: #f5f5f5; --card: #fff; --ink: #222; --sub: #999; --line: #eee;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+header{background:linear-gradient(135deg,var(--wb),#c41230);color:#fff;padding:18px 20px;text-align:center}
+header h1{font-size:20px}
+header p{opacity:.8;font-size:13px;margin-top:2px}
+.container{max-width:800px;margin:0 auto;padding:12px}
+
+/* Tabs */
+.tabs{display:flex;gap:2px;margin-bottom:12px;background:#e0e0e0;border-radius:10px;padding:3px}
+.tabs button{flex:1;padding:10px 4px;border:none;cursor:pointer;font-size:13px;font-weight:600;background:transparent;color:#888;border-radius:8px;transition:.15s}
+.tabs button.active{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.tabs button .emoji{font-size:16px;display:block;margin-bottom:1px}
+
+/* Cards */
+.card{background:var(--card);border-radius:10px;padding:16px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.card h2{font-size:16px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.status{font-size:12px;color:var(--sub);font-weight:400;margin-left:auto}
+
+/* Tables */
+table{width:100%;border-collapse:collapse}
+td,th{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line);font-size:13px}
+th{color:var(--sub);font-size:11px;font-weight:600}
+.rank{font-weight:700;width:28px;text-align:center}
+.rank.top{color:var(--wb)}
+.rank.top-dy{color:var(--dy)}
+a{color:var(--ink);text-decoration:none}
+a:hover{color:var(--wb)}
+.dy-link:hover{color:var(--dy)}
+.hot{color:var(--sub);font-size:12px;white-space:nowrap;text-align:right}
+
+/* Search */
+.search-row{display:flex;gap:8px;margin-bottom:10px}
+.search-row input{flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none}
+.search-row input:focus{border-color:var(--wb)}
+.search-row button{background:var(--wb);color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:14px;white-space:nowrap}
+
+/* Generate */
+.gen-box{background:#1a1a2e;color:#fff;border-radius:10px;padding:16px;margin-bottom:10px}
+.gen-box h2{color:#fff;font-size:16px}
+.gen-box textarea{width:100%;height:72px;border-radius:8px;border:none;padding:10px;font-size:14px;resize:vertical;background:rgba(255,255,255,.1);color:#fff;margin:10px 0}
+.gen-box button{background:var(--wb);color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:14px;cursor:pointer;width:100%}
+.gen-box button:disabled{background:#666}
+.dir{margin:8px 0;padding:8px;background:rgba(255,255,255,.05);border-radius:8px;font-size:13px}
+.dir-name{font-weight:700;color:var(--dy)}
+.dir-cand{padding:3px 8px;background:rgba(255,255,255,.1);border-radius:4px;margin:2px 0}
+.dir-meta{font-size:11px;color:rgba(255,255,255,.4)}
+.top-pick{margin-top:12px;padding:10px;background:linear-gradient(135deg,rgba(254,44,85,.3),rgba(230,22,45,.3));border-radius:8px;border:1px solid rgba(254,44,85,.4)}
+
+/* Learn */
+.insight{background:#fff9e6;border-left:3px solid #f59e0b;padding:8px 12px;border-radius:0 8px 8px 0;margin:6px 0;font-size:13px}
+.date-nav{display:flex;justify-content:center;gap:4px;flex-wrap:wrap;margin:10px 0}
+.date-nav button{padding:5px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;cursor:pointer;font-size:12px}
+.date-nav button.active{background:var(--wb);color:#fff;border-color:var(--wb)}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;margin-right:4px}
+.tag-wb{background:#ffe0e0;color:var(--wb)}
+.tag-dy{background:#ffe0e8;color:var(--dy)}
+.tag-pattern{background:#e0f0ff;color:#2563eb}
+
+.tab-content{display:none}
+.tab-content.active{display:block}
+.empty{text-align:center;padding:40px;color:var(--sub)}
+
+/* responsive */
+@media(max-width:480px){.tabs button{font-size:11px}.tabs button .emoji{font-size:14px}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔥 热搜话题面板</h1>
+  <p>微博热搜 + 抖音热搜 · 实时更新</p>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <button class="active" onclick="switchTab('weibo')"><span class="emoji">🔥</span>微博热搜</button>
+    <button onclick="switchTab('douyin')"><span class="emoji">🎵</span>抖音热搜</button>
+    <button onclick="switchTab('search')"><span class="emoji">🔍</span>话题搜索</button>
+    <button onclick="switchTab('generate')"><span class="emoji">✍️</span>生成文案</button>
+    <button onclick="switchTab('learn')"><span class="emoji">📖</span>每日学习</button>
+  </div>
+
+  <!-- 微博热搜 -->
+  <div id="tab-weibo" class="tab-content active">
+    <div class="card">
+      <h2>🔥 微博热搜 Top 50<span class="status" id="wbStatus">加载中...</span></h2>
+      <table id="wbTable"><tr><td class="empty">加载中...</td></tr></table>
+    </div>
+  </div>
+
+  <!-- 抖音热搜 -->
+  <div id="tab-douyin" class="tab-content">
+    <div class="card">
+      <h2>🎵 抖音热搜 Top 50<span class="status" id="dyStatus">加载中...</span></h2>
+      <table id="dyTable"><tr><td class="empty">加载中...</td></tr></table>
+    </div>
+  </div>
+
+  <!-- 话题搜索 -->
+  <div id="tab-search" class="tab-content">
+    <div class="card">
+      <h2>🔍 话题搜索
+        <span style="display:inline-flex;gap:2px;margin-left:10px;background:#eee;border-radius:8px;padding:2px">
+          <button id="searchToggleWb" class="search-toggle active" onclick="switchSearch('weibo')" style="padding:5px 14px;border:none;border-radius:7px;font-size:13px;cursor:pointer;background:#fff;color:var(--ink);font-weight:600">微博</button>
+          <button id="searchToggleDy" class="search-toggle" onclick="switchSearch('douyin')" style="padding:5px 14px;border:none;border-radius:7px;font-size:13px;cursor:pointer;background:transparent;color:#999">抖音</button>
+        </span>
+      </h2>
+      <div id="searchHintWb" style="font-size:11px;color:var(--sub);margin-bottom:6px">搜索微博历史话题（含过往上榜记录）</div>
+      <div id="searchHintDy" style="font-size:11px;color:var(--sub);margin-bottom:6px;display:none">在当前抖音热搜榜中匹配关键词</div>
+      <div class="search-row">
+        <input id="searchInput" placeholder="输入关键词..." onkeydown="if(event.key==='Enter')doSearch()">
+        <button id="searchBtn" onclick="doSearch()">搜索</button>
+      </div>
+      <div id="searchResults"></div>
+    </div>
+  </div>
+
+  <!-- 生成文案 -->
+  <div id="tab-generate" class="tab-content">
+    <div class="gen-box">
+      <h2>✍️ AI 生成话题文案</h2>
+      <textarea id="genInput" placeholder="输入事件，例如：洛克王国世界新代言人周杰伦上线"></textarea>
+      <button id="genBtn" onclick="doGenerate()">⚡ 生成话题文案</button>
+      <div id="genResult"></div>
+    </div>
+  </div>
+
+  <!-- 每日学习 -->
+  <div id="tab-learn" class="tab-content">
+    <div class="date-nav" id="dateNav"></div>
+    <div id="learnContent"></div>
+  </div>
+</div>
+
+<script>
+function switchTab(name){
+  document.querySelectorAll('.tabs button').forEach((b,i)=>{
+    b.classList.toggle('active',i===['weibo','douyin','search','generate','learn'].indexOf(name));
+  });
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+// ---- 加载微博 ----
+async function loadWeibo(){
+  document.getElementById('wbStatus').textContent='加载中...';
+  try{
+    const items=await fetch('/api/weibo').then(r=>r.json());
+    if(!items.length){document.getElementById('wbTable').innerHTML='<tr><td class="empty">暂无数据</td></tr>';return}
+    const now=new Date();
+    document.getElementById('wbStatus').textContent='更新于 '+now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+' · 每3分钟刷新';
+    document.getElementById('wbTable').innerHTML='<tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr>'+items.map(i=>
+      `<tr><td class="rank ${i.rank<=3?'top':''}">${i.rank}</td><td><a href="${i.url}" target="_blank">${i.title}</a></td><td class="hot">${i.hot}</td></tr>`
+    ).join('');
+  }catch(e){document.getElementById('wbStatus').textContent='连接失败'}
+}
+
+// ---- 加载抖音 ----
+async function loadDouyin(){
+  document.getElementById('dyStatus').textContent='加载中...';
+  try{
+    const items=await fetch('/api/douyin').then(r=>r.json());
+    if(!items.length){document.getElementById('dyTable').innerHTML='<tr><td class="empty">暂无数据</td></tr>';return}
+    const now=new Date();
+    document.getElementById('dyStatus').textContent='更新于 '+now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0')+' · 每3分钟刷新';
+    document.getElementById('dyTable').innerHTML='<tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr>'+items.map(i=>
+      `<tr><td class="rank ${i.rank<=3?'top-dy':''}">${i.rank}</td><td><a class="dy-link" href="${i.url}" target="_blank">${i.title}</a></td><td class="hot">${i.hot}</td></tr>`
+    ).join('');
+  }catch(e){document.getElementById('dyStatus').textContent='连接失败'}
+}
+
+// ---- 搜索 ----
+let searchMode = 'weibo';
+
+function switchSearch(mode) {
+  searchMode = mode;
+  document.getElementById('searchToggleWb').style.background = mode === 'weibo' ? '#fff' : 'transparent';
+  document.getElementById('searchToggleWb').style.color = mode === 'weibo' ? 'var(--ink)' : '#999';
+  document.getElementById('searchToggleWb').style.fontWeight = mode === 'weibo' ? '600' : '400';
+  document.getElementById('searchToggleDy').style.background = mode === 'douyin' ? '#fff' : 'transparent';
+  document.getElementById('searchToggleDy').style.color = mode === 'douyin' ? 'var(--ink)' : '#999';
+  document.getElementById('searchToggleDy').style.fontWeight = mode === 'douyin' ? '600' : '400';
+  document.getElementById('searchHintWb').style.display = mode === 'weibo' ? '' : 'none';
+  document.getElementById('searchHintDy').style.display = mode === 'douyin' ? '' : 'none';
+  document.getElementById('searchResults').innerHTML = '';
+}
+
+async function doSearch(){
+  const q=document.getElementById('searchInput').value.trim();
+  if(!q)return;
+  const btn=document.getElementById('searchBtn');
+  btn.disabled=true;btn.textContent='搜索中...';
+  document.getElementById('searchResults').innerHTML='';
+  const api = searchMode === 'douyin' ? '/api/search-douyin' : '/api/search';
+  try{
+    const items=await fetch(api+'?q='+encodeURIComponent(q)).then(r=>r.json());
+    if(!items.length){document.getElementById('searchResults').innerHTML='<div class="empty">未找到</div>'}
+    else if(items[0]?.error){document.getElementById('searchResults').innerHTML='<div class="empty">'+items[0].error+'</div>'}
+    else if(searchMode==='douyin'){
+      if(items[0] && items[0].appearances){
+        // 历史数据库结果
+        document.getElementById('searchResults').innerHTML='<table><tr><th>话题</th><th>上榜次数</th><th>最高排名</th><th>首次上榜</th><th>最近上榜</th></tr>'+items.map(t=>{
+          const hp=(t.history||[]).slice(0,5).map(h=>'<span style="display:inline-block;padding:1px 4px;margin:1px;border-radius:3px;font-size:11px;background:'+(h.rank<=3?'#ffe0e8':'#f5f5f4')+';color:'+(h.rank<=3?'var(--dy)':'var(--sub)')+'">'+h.date.slice(5)+' #'+h.rank+'</span>').join('');
+          return '<tr><td style="font-weight:500"><a class="dy-link" href="https://www.douyin.com/search/'+encodeURIComponent(t.word)+'" target="_blank">'+t.word+'</a></td><td style="font-weight:600">'+t.appearances+'天</td><td>'+(t.best_rank<=3?'<span style="color:var(--dy);font-weight:700">🥇'+t.best_rank+'</span>':t.best_rank)+'</td><td style="font-size:12px;color:var(--sub)">'+t.first_date+'</td><td style="font-size:12px;color:var(--sub)">'+t.last_date+'</td></tr>'
+        }).join('')+'</table>';
+      }else{
+        // 实时兜底
+        document.getElementById('searchResults').innerHTML='<p style="font-size:12px;color:var(--sub);margin-bottom:8px">📌 实时热搜匹配（历史数据库构建完成后可查全部历史）</p><table><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr>'+items.map((t,i)=>
+          '<tr><td class="rank '+(t.rank<=3?'top-dy':'')+'">'+(t.rank||'')+'</td><td><a class="dy-link" href="https://www.douyin.com/search/'+encodeURIComponent(t.word||t.title||'')+'" target="_blank">'+(t.word||t.title||'')+'</a></td><td class="hot">'+(t.hot||'')+'</td></tr>'
+        ).join('')+'</table>';
+      }
+    }else{
+      // 微博结果：显示最后上榜时间
+      document.getElementById('searchResults').innerHTML='<table><tr><th>#</th><th>话题</th><th>最后上榜</th></tr>'+items.map((t,i)=>
+        `<tr><td class="rank">${i+1}</td><td><a href="${t.url}" target="_blank">${t.name}</a></td><td style="font-size:12px;color:var(--sub)">${t.lastTime||''}</td></tr>`
+      ).join('')+'</table>';
+    }
+  }catch(e){document.getElementById('searchResults').innerHTML='<div class="empty">搜索失败</div>'}
+  btn.disabled=false;btn.textContent='搜索';
+}
+
+// ---- 生成 ----
+async function doGenerate(){
+  const input=document.getElementById('genInput').value.trim();
+  const btn=document.getElementById('genBtn');
+  const div=document.getElementById('genResult');
+  if(!input){div.innerHTML='<div class="dir" style="color:#ff6b6b">请输入事件描述</div>';return}
+  btn.disabled=true;btn.textContent='生成中...';div.innerHTML='';
+  try{
+    const data=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event:input})}).then(r=>r.json());
+    if(data.error){div.innerHTML='<div class="dir" style="color:#ff6b6b">'+data.error+'</div>'}
+    else if(data.directions){
+      let h='';
+      data.directions.forEach(d=>{
+        h+='<div class="dir"><div class="dir-name">'+d.name+' '+d.score+'</div>';
+        (d.candidates||[]).forEach(c=>h+='<div class="dir-cand">💬 '+c+'</div>');
+        h+='<div class="dir-meta">手法：'+d.technique+' · 情绪：'+d.emotion+'</div></div>';
+      });
+      if(data.top_pick)h+='<div class="top-pick"><strong>🏆 '+data.top_pick+'</strong><br><span style="font-size:12px;opacity:.7">'+data.reason+'</span></div>';
+      div.innerHTML=h;
+    }else{div.innerHTML='<div style="white-space:pre-wrap;padding:10px;background:rgba(255,255,255,.05);border-radius:8px">'+JSON.stringify(data,null,2)+'</div>'}
+  }catch(e){div.innerHTML='<div class="dir" style="color:#ff6b6b">连接失败</div>'}
+  btn.disabled=false;btn.textContent='⚡ 生成话题文案';
+}
+
+// ---- 每日学习 ----
+async function initLearn(){
+  try{
+    const data=await fetch('/data.json').then(r=>r.json());
+    document.title='热搜面板 · '+data.date;
+    renderLearn(data);
+    const idx=await fetch('/archive/index.json').then(r=>r.json());
+    const nav=document.getElementById('dateNav');
+    (idx.entries||[]).forEach(e=>{
+      const btn=document.createElement('button');
+      btn.textContent=e.date;btn.onclick=async()=>{
+        document.querySelectorAll('.date-nav button').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        try{renderLearn(await fetch('/archive/'+e.date+'.json').then(r=>r.json()))}catch(ex){}
+      };
+      nav.appendChild(btn);
+    });
+  }catch(e){}
+}
+function renderLearn(data){
+  if(!data){return}
+  let h='';
+  if(data.douyin_hot?.length){
+    h+='<div class="card"><h2>🎵 抖音热搜 Top 10</h2><table>';
+    data.douyin_hot.forEach((t,i)=>h+='<tr><td class="rank top-dy">'+(i+1)+'</td><td>'+t.title+'</td><td class="hot">'+t.hot+'</td></tr>');
+    h+='</table></div>';
+  }
+  if(data.topics?.length){
+    h+='<div class="card"><h2>🔍 深入分析</h2>';
+    data.topics.forEach(t=>{
+      h+='<div style="margin:6px 0;padding:8px;background:#f9f9f9;border-radius:8px"><strong>#'+(t.topic||'')+'</strong> <span class="tag tag-pattern">'+(t.pattern||'')+'</span><span style="font-size:12px;color:#666">'+(t.content_type||'')+'</span><div style="margin-top:3px;font-size:13px">'+(t.insight||'')+'</div></div>';
+    });
+    h+='</div>';
+  }
+  if(data.net_sense?.length){
+    h+='<div class="card"><h2>🎯 今日网感</h2>';
+    data.net_sense.forEach(n=>h+='<div style="padding:6px 0;border-bottom:1px solid #eee;font-size:13px"><span class="tag tag-dy">'+(n.platform||'微博')+'</span> <span style="color:#666;font-size:12px">'+(n.source||'')+'</span> → '+(n.insight||'')+'</div>');
+    h+='</div>';
+  }
+  if(data.learnings?.length){
+    h+='<div class="card"><h2>📝 学习了什么</h2>';
+    data.learnings.forEach(l=>h+='<div class="insight">💡 '+l+'</div>');
+    h+='</div>';
+  }
+  if(data.hot_list?.length){
+    h+='<div class="card"><h2>🔥 当日微博热搜 Top 10</h2><table>';
+    data.hot_list.forEach((t,i)=>{
+      const u='https://s.weibo.com/weibo?q=%23'+encodeURIComponent(t.title||'')+'%23';
+      h+='<tr><td class="rank top">'+(i+1)+'</td><td><a href="'+u+'" target="_blank">'+(t.title||'')+'</a></td><td class="hot">'+(t.hot||'')+'</td></tr>';
+    });
+    h+='</table></div>';
+  }
+  if(data.case_library?.length){
+    h+='<div class="card"><h2>📚 案例库</h2>';
+    data.case_library.forEach(c=>h+='<div style="padding:4px 0;font-size:13px"><span style="color:#999;font-size:11px">'+(c.date||'')+'</span> '+(c.source||'')+' → <strong>'+(c.insight||'')+'</strong></div>');
+    h+='</div>';
+  }
+  document.getElementById('learnContent').innerHTML=h||'<div class="empty">暂无数据</div>';
+}
+
+// 自动刷新
+loadWeibo();loadDouyin();initLearn();
+setInterval(()=>{loadWeibo();loadDouyin()},180000);
+</script>
+</body>
+</html>
