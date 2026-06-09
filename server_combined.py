@@ -338,7 +338,7 @@ class Handler(BaseHTTPRequestHandler):
             self_results = search_self_db(query)
             # 方法2: 查第三方历史库（lonnyzhang423）
             ext_results = []
-            db_path = os.path.join(os.path.dirname(BASE_DIR), "douyin-hot-site", "history.db")
+            db_path = os.path.join(BASE_DIR, "douyin_history.db")
             if os.path.exists(db_path):
                 try:
                     db = sqlite3.connect(db_path)

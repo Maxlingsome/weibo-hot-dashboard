@@ -8,3 +8,5 @@ hot_cache.json
 railway.toml
 douyin_self.db
 douyin_self.db-*
+weibo_self.db
+douyin_history.db-*
