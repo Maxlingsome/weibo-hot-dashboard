@@ -204,17 +204,15 @@ def fetch_weibo_hot():
                 hot_str = f"{num/10000:.0f}万"
             else:
                 hot_str = str(num)
-            label = item.get("icon_desc", "") or item.get("label_name", "")
-            # 文娱标签补充
-            wy_label = wenyu_labels.get(word, "")
-            if wy_label and wy_label != label:
-                label = (label + " " + wy_label).strip() if label else wy_label
+            badge = item.get("icon_desc", "") or item.get("label_name", "")  # 新/荐/热
+            wy_label = wenyu_labels.get(word, "")  # 剧集/综艺/演出
             result.append({
                 "rank": i,
                 "title": word,
                 "hot": hot_str,
                 "hot_value": num,
-                "label": label,
+                "badge": badge,
+                "label": wy_label,
                 "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(word)}%23"
             })
         return result
