@@ -280,7 +280,7 @@ def poll_weibo():
                 print(f"[微博] {len(items)} 条热搜（已保存）")
         except Exception as e:
             print(f"[微博] 轮询异常: {e}")
-        time.sleep(180)  # 3分钟
+        time.sleep(60)  # 3分钟
 
 
 def poll_douyin():
@@ -295,7 +295,7 @@ def poll_douyin():
                 print(f"[抖音] {len(items)} 条热搜（已保存）")
         except Exception as e:
             print(f"[抖音] 轮询异常: {e}")
-        time.sleep(180)
+        time.sleep(60)
 
 def poll_wenyu():
     while True:
@@ -308,7 +308,7 @@ def poll_wenyu():
                 print(f"[文娱榜] {len(items)} 条")
         except Exception as e:
             print(f"[文娱榜] 轮询异常: {e}")
-        time.sleep(180)
+        time.sleep(60)
 
 def poll_kuaishou():
     while True:
@@ -322,7 +322,7 @@ def poll_kuaishou():
                 print(f"[快手] {len(items)} 条（已保存）")
         except Exception as e:
             print(f"[快手] 轮询异常: {e}")
-        time.sleep(180)
+        time.sleep(60)
 
 
 # ---- DeepSeek（复用）----

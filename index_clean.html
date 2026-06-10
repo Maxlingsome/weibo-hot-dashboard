@@ -237,9 +237,9 @@ footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)
 <!-- Weibo -->
 <div id="tab-weibo" class="tab-content active">
   <div class="card-outer"><div class="card-inner">
-    <div class="card-header"><h2><span class="accent-dot" id="wbDot" class="w"></span>微博热搜 <span class="search-toggle-wrap"><button id="wbToggleMain" class="active" onclick="switchWbMode('main')">总榜</button><button id="wbToggleWenyu" onclick="switchWbMode('wenyu')">文娱榜</button></span></h2><span class="meta" id="wbMeta">每 3 分钟更新</span></div>
-    <div id="wbTableMain"><table><thead><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr></thead><tbody id="wbBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table></div>
-    <div id="wbTableWenyu" style="display:none"><table><thead><tr><th>#</th><th>话题</th><th>标签</th><th style="text-align:right">热度</th></tr></thead><tbody id="wyBody"><tr><td colspan="4" class="empty">加载中…</td></tr></tbody></table></div>
+    <div class="card-header"><h2><span class="accent-dot" id="wbDot" class="w"></span>微博热搜 </h2><span class="meta" id="wbMeta">每 3 分钟更新</span></div>
+    <table><thead><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr></thead><tbody id="wbBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table>
+    
   </div></div>
 </div>
 
@@ -317,15 +317,6 @@ async function loadWeibo(){
   }catch(e){}
 }
 // === Load Wenyu ===
-async function loadWenyu(){
-  try{
-    const items=await fetch('/api/wenyu').then(r=>r.json());
-    if(!items.length)return;
-    document.getElementById('wyBody').innerHTML=items.map(i=>
-      '<tr><td class="rank'+(i.rank<=3?' dy-top':'')+'">'+i.rank+'</td><td class="word"><a class="dy-link" href="'+i.url+'" target="_blank">'+i.title+'</a></td><td style="font-size:11px;color:var(--ink-dim)">'+(i.label||'')+'</td><td class="hot-val">'+i.hot+'</td></tr>'
-    ).join('');
-  }catch(e){}
-}
 // === Load Kuaishou ===
 async function loadKuaishou(){
   try{
@@ -357,16 +348,7 @@ async function loadDouyin(){
 
 // === Search ===
 let searchMode='weibo';
-let wbMode='main';
-function switchWbMode(m){
-  wbMode=m;
-  document.getElementById('wbToggleMain').classList.toggle('active',m==='main');
-  document.getElementById('wbToggleWenyu').classList.toggle('active',m==='wenyu');
-  document.getElementById('wbTableMain').style.display=m==='main'?'':'none';
-  document.getElementById('wbTableWenyu').style.display=m==='wenyu'?'':'none';
-  document.getElementById('wbLabel').textContent=m==='main'?'微博热搜':'文娱榜';
-  document.getElementById('wbDot').className='accent-dot '+(m==='main'?'w':'d');
-}
+
 function switchSearch(m){
   searchMode=m;
   document.getElementById('stWb').classList.toggle('active',m==='weibo');
@@ -476,8 +458,8 @@ async function doGenerate(){
 }
 
 // === Init ===
-loadWeibo();loadWenyu();loadDouyin();loadKuaishou();
-setInterval(()=>{loadWeibo();loadWenyu();loadDouyin();loadKuaishou()},180000);
+loadWeibo();loadDouyin();loadKuaishou();
+setInterval(()=>{loadWeibo();loadDouyin();loadKuaishou()},60000);
 </script>
 </body>
 </html>
