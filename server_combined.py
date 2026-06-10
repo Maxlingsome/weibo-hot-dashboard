@@ -179,6 +179,23 @@ def fetch_weibo_hot():
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read())
         items = data.get("data", {}).get("realtime", [])
+        # 同时获取文娱榜标签（剧集/综艺/演出等）
+        wenyu_labels = {}
+        try:
+            url2 = "https://weibo.com/ajax/statuses/hot_band?band_id=wen_yu"
+            req2 = urllib.request.Request(url2, headers={
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+                "Referer": "https://weibo.com/"
+            })
+            with urllib.request.urlopen(req2, timeout=8) as resp2:
+                wy_data = json.loads(resp2.read())
+            for wy_item in wy_data.get("data", {}).get("band_list", []):
+                w = wy_item.get("word", "")
+                sl = wy_item.get("subject_label", "")
+                if w and sl:
+                    wenyu_labels[w] = sl
+        except:
+            pass
         result = []
         for i, item in enumerate(items, 1):
             word = item.get("word", "")
@@ -188,6 +205,10 @@ def fetch_weibo_hot():
             else:
                 hot_str = str(num)
             label = item.get("icon_desc", "") or item.get("label_name", "")
+            # 文娱标签补充
+            wy_label = wenyu_labels.get(word, "")
+            if wy_label and wy_label != label:
+                label = (label + " " + wy_label).strip() if label else wy_label
             result.append({
                 "rank": i,
                 "title": word,
