@@ -238,7 +238,7 @@ footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)
 <div id="tab-weibo" class="tab-content active">
   <div class="card-outer"><div class="card-inner">
     <div class="card-header"><h2><span class="accent-dot" id="wbDot" class="w"></span>微博热搜 </h2><span class="meta" id="wbMeta">每分钟更新</span></div>
-    <table><thead><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr></thead><tbody id="wbBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table>
+    <table><thead><tr><th>#</th><th>话题</th><th>标签</th><th style="text-align:right">热度</th></tr></thead><tbody id="wbBody"><tr><td colspan="4" class="empty">加载中…</td></tr></tbody></table>
     
   </div></div>
 </div>
@@ -312,7 +312,7 @@ async function loadWeibo(){
     
     
     document.getElementById('wbBody').innerHTML=items.map(i=>
-      '<tr><td class="rank'+(i.rank<=3?' wb-top':'')+'">'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a>'+(i.label?' <span style="display:inline-block;padding:0 4px;border-radius:3px;font-size:10px;font-weight:600;background:rgba(255,59,92,.15);color:var(--wb)">'+i.label+'</span>':'')+'</td><td class="hot-val">'+i.hot+'</td></tr>'
+      '<tr><td class="rank'+(i.rank<=3?' wb-top':'')+'">'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td><td style="font-size:11px;color:var(--ink-muted);white-space:nowrap">'+(i.label||'')+'</td><td class="hot-val">'+i.hot+'</td></tr>'
     ).join('');
   }catch(e){}
 }
