@@ -167,28 +167,32 @@ def fetch_douyin_hot():
         return []
 
 
-# ---- 微博热搜抓取 ----
+# ---- 微博热搜抓取（官方 API）----
 def fetch_weibo_hot():
+    """从微博官方 API 抓实时热搜"""
     try:
-        timeid, timestamp = get_latest()
-        items = get_items(timeid)
+        url = "https://weibo.com/ajax/side/hotSearch"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Referer": "https://weibo.com/"
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        items = data.get("data", {}).get("realtime", [])
         result = []
         for i, item in enumerate(items, 1):
-            name = item[0]
-            hotindex = int(item[3])
-            if hotindex >= 1_000_000:
-                hot_str = f"{hotindex/1_000_000:.1f}M"
-            elif hotindex >= 1_000:
-                hot_str = f"{hotindex/1_000:.0f}K"
+            word = item.get("word", "")
+            num = item.get("num", 0)
+            if num >= 10000:
+                hot_str = f"{num/10000:.0f}万"
             else:
-                hot_str = str(hotindex)
+                hot_str = str(num)
             result.append({
                 "rank": i,
-                "title": name,
+                "title": word,
                 "hot": hot_str,
-                "hot_value": hotindex,
-                "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(name)}%23",
-                "updated_at": timestamp.replace(".0", "") if timestamp else ""
+                "hot_value": num,
+                "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(word)}%23"
             })
         return result
     except Exception as e:
