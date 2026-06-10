@@ -227,43 +227,22 @@ footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)
 
 <!-- Floating Tab Bar -->
 <div class="tab-bar">
-  <button class="active" onclick="switchTab('weibo')">微博热搜</button>
-  <button onclick="switchTab('douyin')">抖音热搜</button>
-  <button onclick="switchTab('kuaishou')">快手热搜</button>
-  <button onclick="switchTab('search')">话题搜索</button>
+  <button class="active" onclick="switchTab('hot')">实时热搜</button>
+  <button onclick="switchTab('search')">历史热搜</button>
   <button onclick="switchTab('generate')">我来想话题</button>
   <button onclick="switchTab('monitor')">话题监测</button>
 </div>
 
-<!-- Weibo -->
-<div id="tab-weibo" class="tab-content active">
-  <div class="card-outer"><div class="card-inner">
-    <div class="card-header"><h2><span class="accent-dot" id="wbDot" class="w"></span>微博热搜 </h2><span class="meta" id="wbMeta">每分钟更新</span></div>
-    <table><thead><tr><th>#</th><th>话题</th><th>标签</th><th style="text-align:right">热度</th></tr></thead><tbody id="wbBody"><tr><td colspan="4" class="empty">加载中…</td></tr></tbody></table>
-    
-  </div></div>
-</div>
-
-<!-- Douyin -->
-<div id="tab-douyin" class="tab-content">
-  <div class="card-outer"><div class="card-inner">
-    <div class="card-header"><h2><span class="accent-dot d"></span>抖音热搜榜单</h2><span class="meta" id="dyMeta">每分钟更新</span></div>
-    <table><thead><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr></thead><tbody id="dyBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table>
-  </div></div>
-</div>
-
-<!-- Kuaishou -->
-<div id="tab-kuaishou" class="tab-content">
-  <div class="card-outer"><div class="card-inner">
-    <div class="card-header"><h2><span class="accent-dot" style="background:#ff4906;box-shadow:0 0 6px rgba(255,73,6,.3)"></span>快手热搜</h2><span class="meta" id="ksMeta">每分钟更新</span></div>
-    <table><thead><tr><th>#</th><th>话题</th><th style="text-align:right">热度</th></tr></thead><tbody id="ksBody"><tr><td colspan="3" class="empty">加载中…</td></tr></tbody></table>
-  </div></div>
+<!-- Hot -->
+<div id="tab-hot" class="tab-content active">
+  <div class="card-header" style="margin-bottom:14px"><h2>实时热搜 <span class="search-toggle-wrap" id="hotToggle"></span></h2><span class="meta" id="hotMeta">每分钟更新</span></div>
+  <div id="hotContent"></div>
 </div>
 
 <!-- Search -->
 <div id="tab-search" class="tab-content">
   <div class="card-outer"><div class="card-inner">
-    <div class="card-header"><h2>话题搜索 <span class="search-toggle-wrap"><button id="stWb" class="active" onclick="switchSearch('weibo')">微博</button><button id="stDy" onclick="switchSearch('douyin')">抖音</button></span></h2></div>
+    <div class="card-header"><h2>历史热搜 <span class="search-toggle-wrap"><button id="stWb" class="active" onclick="switchSearch('weibo')">微博</button><button id="stDy" onclick="switchSearch('douyin')">抖音</button></span></h2></div>
     <div class="search-hint" id="searchHint">搜索微博历史话题</div>
     <div class="search-row"><input id="searchInput" placeholder="输入关键词…" onkeydown="if(event.key==='Enter')doSearch()"><button id="searchBtn" onclick="doSearch()">搜索</button></div>
     <div id="searchResults"></div>
@@ -296,7 +275,7 @@ footer{text-align:center;padding:30px 20px;font-size:11px;color:var(--ink-muted)
 
 <script>
 // === Tab Switch ===
-const TABS=['weibo','douyin','kuaishou','search','generate','monitor'];
+const TABS=['hot','search','generate','monitor'];
 function switchTab(name){
   document.querySelectorAll('.tab-bar button').forEach((b,i)=>b.classList.toggle('active',i===TABS.indexOf(name)));
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
@@ -304,48 +283,58 @@ function switchTab(name){
 }
 
 // === Load Weibo ===
-async function loadWeibo(){
+let hotPlatform='weibo';
+const hotColors={weibo:'#ff3b5c',douyin:'#ff5e82',kuaishou:'#ff4906',bilibili:'#00a1d6'};
+const hotNames={weibo:'微博',douyin:'抖音',kuaishou:'快手',bilibili:'B站'};
+
+function buildHotToggle(){
+  let h='';
+  for(const k in hotColors){
+    h+='<button id="ht'+k+'" class="'+(k===hotPlatform?'active':'')+'" onclick="switchHot(\''+k+'\')">'+hotNames[k]+'</button>';
+  }
+  document.getElementById('hotToggle').innerHTML=h;
+  updateHotBtnColors();
+}
+function updateHotBtnColors(){
+  for(const k in hotColors){
+    const btn=document.getElementById('ht'+k);
+    if(!btn)continue;
+    btn.style.background=k===hotPlatform?hotColors[k]:'transparent';
+    btn.style.color=k===hotPlatform?'#fff':'var(--ink-dim)';
+  }
+}
+function switchHot(p){
+  hotPlatform=p;
+  updateHotBtnColors();
+  loadHotData();
+}
+async function loadHotData(){
+  const apis={weibo:'/api/weibo',douyin:'/api/douyin',kuaishou:'/api/kuaishou',bilibili:'/api/bilibili'};
   try{
-    const items=await fetch('/api/weibo').then(r=>r.json());
+    const items=await fetch(apis[hotPlatform]).then(r=>r.json());
     if(!items.length)return;
     const d=new Date(); const ts=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
-    
-    
-    
-    document.getElementById('wbBody').innerHTML=items.map(i=>
-      '<tr><td class="rank'+(i.rank<=3?' wb-top':'')+'">'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a>'+(i.badge?' <span style="display:inline-block;padding:0 4px;border-radius:3px;font-size:10px;font-weight:600;background:rgba(255,59,92,.15);color:var(--wb)">'+i.badge+'</span>':'')+'</td><td style="font-size:11px;color:var(--ink-muted);white-space:nowrap">'+(i.label||'')+'</td><td class="hot-val">'+i.hot+'</td></tr>'
-    ).join('');
+    document.getElementById('hotMeta').textContent=ts+'刷新';
+    let rows='';
+    items.forEach(i=>{
+      const rc=i.rank<=10?' style="color:'+hotColors[hotPlatform]+';font-weight:700"':'';
+      if(hotPlatform==='weibo'){
+        rows+='<tr><td class="rank"'+rc+'>'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a>'+(i.badge?' <span class="badge">'+i.badge+'</span>':'')+'</td><td class="label-cell">'+(i.label||'')+'</td><td class="hot-val">'+i.hot+'</td></tr>';
+      }else if(hotPlatform==='bilibili'){
+        rows+='<tr><td class="rank"'+rc+'>'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td></tr>';
+      }else{
+        rows+='<tr><td class="rank"'+rc+'>'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td><td class="hot-val">'+i.hot+'</td></tr>';
+      }
+    });
+    const thead=hotPlatform==='weibo'
+      ?'<thead><tr><th>#</th><th>话题</th><th>标签</th><th style="text-align:right">热度</th></tr></thead>'
+      :'<thead><tr><th>#</th><th>话题</th>'+(hotPlatform!=='bilibili'?'<th style="text-align:right">热度</th>':'')+'</tr></thead>';
+    document.getElementById('hotContent').innerHTML='<div class="card-outer"><div class="card-inner"><table>'+thead+'<tbody>'+rows+'</tbody></table></div></div>';
   }catch(e){}
 }
-// === Load Wenyu ===
-// === Load Kuaishou ===
-async function loadKuaishou(){
-  try{
-    const items=await fetch('/api/kuaishou').then(r=>r.json());
-    if(!items.length)return;
-    const d=new Date(); const ts=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
-    
-    
-    
-    document.getElementById('ksMeta').textContent=ts+' · '+items.length+'条'; document.getElementById('ksBody').innerHTML=items.map(i=>
-      '<tr><td class="rank'+(i.rank<=3?'" style="color:#ff4906"':'')+'">'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td><td class="hot-val">'+i.hot+'</td></tr>'
-    ).join('');
-  }catch(e){}
-}
-// === Load Douyin ===
-async function loadDouyin(){
-  try{
-    const items=await fetch('/api/douyin').then(r=>r.json());
-    if(!items.length)return;
-    const d=new Date(); const ts=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
-    
-    
-    
-    document.getElementById('dyMeta').textContent=ts+' · '+items.length+'条'; document.getElementById('dyBody').innerHTML=items.map(i=>
-      '<tr><td class="rank'+(i.rank<=3?' dy-top':'')+'">'+i.rank+'</td><td class="word"><a class="dy-link" href="'+i.url+'" target="_blank">'+i.title+'</a></td><td class="hot-val">'+i.hot+'</td></tr>'
-    ).join('');
-  }catch(e){}
-}
+
+buildHotToggle();loadHotData();
+setInterval(loadHotData,60000);
 
 // === Search ===
 let searchMode='weibo';
@@ -459,8 +448,6 @@ async function doGenerate(){
 }
 
 // === Init ===
-loadWeibo();loadDouyin();loadKuaishou();
-setInterval(()=>{loadWeibo();loadDouyin();loadKuaishou()},60000);
 </script>
 </body>
 </html>

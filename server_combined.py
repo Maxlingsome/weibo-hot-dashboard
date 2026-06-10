@@ -283,9 +283,33 @@ def fetch_kuaishou_hot():
         return []
 
 
+def fetch_bilibili_hot():
+    """抓取B站热搜"""
+    try:
+        url = "https://api.bilibili.com/x/web-interface/wbi/search/square?limit=50"
+        req = urllib.request.Request(url, headers={
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Referer": "https://www.bilibili.com/"
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        items = data.get("data", {}).get("trending", {}).get("list", [])
+        result = []
+        for i, item in enumerate(items, 1):
+            word = item.get("keyword", "") or item.get("show_name", "")
+            result.append({
+                "rank": i, "title": word, "hot": "",
+                "url": f"https://search.bilibili.com/all?keyword={urllib.request.quote(word)}"
+            })
+        return result
+    except Exception as e:
+        print(f"[B站] 抓取失败: {e}")
+        return []
+
+
 # ---- 内存缓存 ----
-CACHE = {"weibo": [], "douyin": [], "wenyu": [], "kuaishou": [],
-         "weibo_time": 0, "douyin_time": 0, "wenyu_time": 0, "kuaishou_time": 0}
+CACHE = {"weibo": [], "douyin": [], "wenyu": [], "kuaishou": [], "bilibili": [],
+         "weibo_time": 0, "douyin_time": 0, "wenyu_time": 0, "kuaishou_time": 0, "bilibili_time": 0}
 cache_lock = threading.Lock()
 
 
@@ -343,6 +367,19 @@ def poll_kuaishou():
                 print(f"[快手] {len(items)} 条（已保存）")
         except Exception as e:
             print(f"[快手] 轮询异常: {e}")
+        time.sleep(60)
+
+def poll_bilibili():
+    while True:
+        try:
+            items = fetch_bilibili_hot()
+            if items:
+                with cache_lock:
+                    CACHE["bilibili"] = items
+                    CACHE["bilibili_time"] = time.time()
+                print(f"[B站] {len(items)} 条")
+        except Exception as e:
+            print(f"[B站] 轮询异常: {e}")
         time.sleep(60)
 
 
@@ -437,6 +474,11 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/kuaishou":
             with cache_lock:
                 data = list(CACHE["kuaishou"])
+            self._json(data)
+
+        elif path == "/api/bilibili":
+            with cache_lock:
+                data = list(CACHE["bilibili"])
             self._json(data)
 
         elif path == "/api/monitor":
@@ -793,12 +835,12 @@ def main():
 
     # 首次抓取
     print("首次抓取中...")
-    for name, fn in [("微博", fetch_weibo_hot), ("抖音", fetch_douyin_hot), ("文娱", fetch_weibo_wenyu), ("快手", fetch_kuaishou_hot)]:
+    for name, fn in [("微博", fetch_weibo_hot), ("抖音", fetch_douyin_hot), ("文娱", fetch_weibo_wenyu), ("快手", fetch_kuaishou_hot), ("B站", fetch_bilibili_hot)]:
         try:
             items = fn()
             if items:
                 with cache_lock:
-                    key_map = {"微博": "weibo", "抖音": "douyin", "文娱": "wenyu", "快手": "kuaishou"}
+                    key_map = {"微博": "weibo", "抖音": "douyin", "文娱": "wenyu", "快手": "kuaishou", "B站": "bilibili"}
                     k = key_map.get(name, name)
                     CACHE[k] = items
                     CACHE[k + "_time"] = time.time()
@@ -811,6 +853,7 @@ def main():
     threading.Thread(target=poll_douyin, daemon=True).start()
     threading.Thread(target=poll_wenyu, daemon=True).start()
     threading.Thread(target=poll_kuaishou, daemon=True).start()
+    threading.Thread(target=poll_bilibili, daemon=True).start()
     threading.Thread(target=backup_loop, daemon=True).start()
 
     # 首次备份（1分钟后，等首批数据入库）
