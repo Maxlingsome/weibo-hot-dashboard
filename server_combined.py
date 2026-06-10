@@ -41,8 +41,8 @@ def init_self_db():
         _init_one_db(db_path)
 
 def _save_snapshot(db_path, items, word_key="title"):
-    """通用：保存热搜快照，同一天同一话题保留最高排名"""
-    today = date.today().isoformat()
+    """通用：保存热搜快照，按小时记录（每次抓取独立存储）"""
+    now = time.strftime("%Y-%m-%d %H:00")  # 精确到小时
     db = sqlite3.connect(db_path)
     for item in items:
         word = item.get(word_key, "")
@@ -50,12 +50,7 @@ def _save_snapshot(db_path, items, word_key="title"):
         hot = item.get("hot_value", 0)
         if not word:
             continue
-        existing = db.execute("SELECT id, rank FROM topics WHERE word=? AND date=?", (word, today)).fetchone()
-        if existing:
-            if rank < existing[1]:
-                db.execute("UPDATE topics SET rank=?, hot_value=? WHERE id=?", (rank, hot, existing[0]))
-        else:
-            db.execute("INSERT INTO topics(word, date, rank, hot_value) VALUES(?,?,?,?)", (word, today, rank, hot))
+        db.execute("INSERT INTO topics(word, date, rank, hot_value) VALUES(?,?,?,?)", (word, now, rank, hot))
     db.commit()
     db.close()
 
@@ -96,6 +91,45 @@ def search_self_db(query):
 
 def search_weibo_self_db(query):
     return _search_db(WB_SELF_DB, query)
+
+def _merge_monitor_data(history_results, self_results):
+    """合并历史库和自建库的监测数据"""
+    merged = {}
+    for r in history_results + self_results:
+        w = r["word"]
+        if w not in merged:
+            merged[w] = {"word": w, "first_date": r["first_date"], "last_date": r["last_date"],
+                         "best_rank": r["best_rank"], "appearances": 0, "history": []}
+        info = merged[w]
+        info["appearances"] += r.get("appearances", 0)
+        info["first_date"] = min(info["first_date"], r["first_date"])
+        info["last_date"] = max(info["last_date"], r["last_date"])
+        info["best_rank"] = min(info["best_rank"], r["best_rank"])
+        info["history"].extend(r.get("history", []))
+    # 去重+排序 history
+    for info in merged.values():
+        seen = set()
+        unique = []
+        for h in sorted(info["history"], key=lambda x: x["date"]):
+            k = f'{h["date"]}-{h["rank"]}'
+            if k not in seen:
+                seen.add(k)
+                unique.append(h)
+        info["history"] = sorted(unique, key=lambda x: x["date"])[-30:]
+    return list(merged.values())
+
+def _get_topic_records(db_path, word):
+    """获取话题在所有日期的排名记录（用于走势图）"""
+    try:
+        db = sqlite3.connect(db_path)
+        rows = db.execute(
+            "SELECT date, rank, hot_value FROM topics WHERE word=? ORDER BY date ASC",
+            (word,)
+        ).fetchall()
+        db.close()
+        return [{"date": r[0], "rank": r[1], "hot": r[2]} for r in rows]
+    except:
+        return []
 
 PORT = int(os.getenv("PORT", "18768"))
 
@@ -380,6 +414,72 @@ class Handler(BaseHTTPRequestHandler):
                 data = list(CACHE["kuaishou"])
             self._json(data)
 
+        elif path == "/api/monitor":
+            query = params.get("q", [""])[0].strip()
+            if not query:
+                return self._json({"error": "请输入话题词"})
+            result = {"query": query, "platforms": {}}
+            # 精确匹配单个话题
+            for platform, sources in [
+                ("weibo", [os.path.join(BASE_DIR, "weibo_history.db"), WB_SELF_DB]),
+                ("douyin", [os.path.join(BASE_DIR, "douyin_history.db"), DY_SELF_DB]),
+                ("kuaishou", [KS_SELF_DB]),
+            ]:
+                records = []
+                for db_path in sources:
+                    records.extend(_get_topic_records(db_path, query) if os.path.exists(db_path) else [])
+                if records:
+                    seen = set()
+                    unique = []
+                    for r in sorted(records, key=lambda x: x["date"]):
+                        k = f'{r["date"]}-{r["rank"]}'
+                        if k not in seen:
+                            seen.add(k)
+                            unique.append(r)
+                    ranks = [r["rank"] for r in unique if r["rank"] > 0]
+                    result["platforms"][platform] = {
+                        "found": True,
+                        "records": unique,
+                        "best_rank": min(ranks) if ranks else None,
+                        "total_days": len(unique),
+                        "first_date": unique[0]["date"],
+                        "last_date": unique[-1]["date"],
+                    }
+                else:
+                    # 查实时缓存兜底
+                    with cache_lock:
+                        live = CACHE.get(platform, [])
+                    live_match = [i for i in live if i.get("title", "") == query]
+                    result["platforms"][platform] = {
+                        "found": len(live_match) > 0,
+                        "live": live_match,
+                        "records": [],
+                    }
+            self._json(result)
+
+        elif path == "/api/monitor-detail":
+            word = params.get("word", [""])[0].strip()
+            platform = params.get("platform", ["weibo"])[0].strip()
+            if not word:
+                return self._json([])
+            db_map = {
+                "weibo": [os.path.join(BASE_DIR, "weibo_history.db"), WB_SELF_DB],
+                "douyin": [os.path.join(BASE_DIR, "douyin_history.db"), DY_SELF_DB],
+                "kuaishou": [KS_SELF_DB],
+            }
+            records = []
+            for db_path in db_map.get(platform, []):
+                records.extend(_get_topic_records(db_path, word))
+            # 去重+排序
+            seen = set()
+            unique = []
+            for r in sorted(records, key=lambda x: x["date"]):
+                k = f'{r["date"]}-{r["rank"]}'
+                if k not in seen:
+                    seen.add(k)
+                    unique.append(r)
+            self._json(unique)
+
         elif path == "/api/all":
             with cache_lock:
                 data = {
@@ -500,7 +600,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(results)
 
         elif path == "/" or path == "/index.html":
-            html_path = os.path.join(BASE_DIR, "index_live.html")
+            html_path = os.path.join(BASE_DIR, "index_clean.html")
             if not os.path.exists(html_path):
                 html_path = os.path.join(BASE_DIR, "index_taste.html")
             if not os.path.exists(html_path):
