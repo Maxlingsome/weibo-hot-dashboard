@@ -187,11 +187,13 @@ def fetch_weibo_hot():
                 hot_str = f"{num/10000:.0f}万"
             else:
                 hot_str = str(num)
+            label = item.get("icon_desc", "") or item.get("label_name", "")
             result.append({
                 "rank": i,
                 "title": word,
                 "hot": hot_str,
                 "hot_value": num,
+                "label": label,
                 "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(word)}%23"
             })
         return result
