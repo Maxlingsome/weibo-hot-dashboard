@@ -761,12 +761,14 @@ class Handler(BaseHTTPRequestHandler):
                     ).fetchone() is not None
 
                     if has_fts:
+                        # CJK 分词查询
+                        fts_query = ' '.join(CJK_RE.sub(r' \1 ', query).split())
                         rows = db.execute(
                             "SELECT t.word, t.date, t.rank FROM topics_fts f "
                             "JOIN topics t ON t.id = f.rowid "
                             "WHERE topics_fts MATCH ? "
                             "ORDER BY t.date DESC, t.rank ASC LIMIT 100",
-                            (query,)
+                            (fts_query,)
                         ).fetchall()
                     else:
                         rows = db.execute(
