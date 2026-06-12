@@ -63,27 +63,132 @@ def save_weibo_snapshot(items):
 def save_kuaishou_snapshot(items):
     _save_snapshot(KS_SELF_DB, items, word_key="title")
 
+# CJK 字符正则（FTS5 搜索时查询分词用）
+CJK_RE = re.compile(r'([一-鿿㐀-䶿豈-﫿])')
+
+
+def _space_cjk(text):
+    """在 CJK 字符间插入空格，使 FTS5 能逐字索引中文"""
+    return ' '.join(CJK_RE.sub(r' \1 ', text).split())
+
+
+def _ensure_fts():
+    """启动时检查并为历史库构建 FTS5 索引（如果不存在）"""
+    for db_path, label in [
+        (os.path.join(BASE_DIR, "weibo_history.db"), "微博历史库"),
+        (os.path.join(BASE_DIR, "douyin_history.db"), "抖音历史库"),
+    ]:
+        if not os.path.exists(db_path):
+            continue
+        try:
+            db = sqlite3.connect(db_path)
+            has_fts = db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='topics_fts'"
+            ).fetchone() is not None
+            db.close()
+            if has_fts:
+                print(f"  [{label}] FTS5 索引已存在，跳过")
+                continue
+        except:
+            pass
+
+        print(f"  [{label}] 构建 FTS5 索引...")
+        t0 = time.time()
+        try:
+            db = sqlite3.connect(db_path)
+            db.execute("PRAGMA journal_mode=WAL")
+            db.execute("DROP TABLE IF EXISTS topics_fts")
+            db.execute("CREATE VIRTUAL TABLE topics_fts USING fts5(word)")
+            db.commit()
+
+            total = db.execute("SELECT COUNT(*) FROM topics").fetchone()[0]
+            batch_size = 5000
+            offset = 0
+            inserted = 0
+            while offset < total:
+                rows = db.execute(
+                    "SELECT id, word FROM topics ORDER BY id LIMIT ? OFFSET ?",
+                    (batch_size, offset)
+                ).fetchall()
+                for row_id, word in rows:
+                    db.execute(
+                        "INSERT INTO topics_fts(rowid, word) VALUES(?, ?)",
+                        (row_id, _space_cjk(word))
+                    )
+                    inserted += 1
+                db.commit()
+                offset += batch_size
+            db.close()
+            elapsed = time.time() - t0
+            print(f"  [{label}] ✅ FTS5 索引完成（{inserted} 条，{elapsed:.1f}s）")
+        except Exception as e:
+            print(f"  [{label}] ❌ FTS5 构建失败: {e}")
+
+
 def _search_db(db_path, query):
-    """通用：搜索数据库，返回聚合结果"""
+    """通用：搜索数据库，优先 FTS5（CJK 分词）→ LIKE 兜底，返回聚合结果"""
     try:
         db = sqlite3.connect(db_path)
+        db.execute("PRAGMA journal_mode=WAL")
         db.row_factory = sqlite3.Row
-        rows = db.execute("SELECT word, date, rank FROM topics WHERE word LIKE ? ORDER BY date DESC, rank ASC LIMIT 200", (f"%{query}%",)).fetchall()
+
+        # 检查 FTS5 索引是否存在
+        has_fts = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='topics_fts'"
+        ).fetchone() is not None
+
+        if has_fts:
+            # FTS5 CJK 分词搜索：查询词也做空格分词
+            fts_query = ' '.join(CJK_RE.sub(r' \1 ', query).split())
+            rows = db.execute("""
+                SELECT t.word, t.date, t.rank
+                FROM topics_fts f
+                JOIN topics t ON t.id = f.rowid
+                WHERE topics_fts MATCH ?
+                ORDER BY t.date DESC, t.rank ASC
+                LIMIT 200
+            """, (fts_query,)).fetchall()
+        else:
+            # LIKE 兜底（无 FTS 时）
+            rows = db.execute(
+                "SELECT word, date, rank FROM topics WHERE word LIKE ? ORDER BY date DESC, rank ASC LIMIT 200",
+                (f"%{query}%",)
+            ).fetchall()
+
+        # 聚合：SQL GROUP BY 计算元信息
+        if rows:
+            word_set = list(set(r['word'] for r in rows))
+            placeholders = ','.join('?' for _ in word_set)
+            agg_rows = db.execute(
+                f"SELECT word, MIN(date) as first_date, MAX(date) as last_date, "
+                f"MIN(rank) as best_rank, COUNT(*) as cnt "
+                f"FROM topics WHERE word IN ({placeholders}) GROUP BY word",
+                word_set
+            ).fetchall()
+            agg_map = {r['word']: r for r in agg_rows}
+        else:
+            agg_map = {}
+
         by_word = {}
         for r in rows:
             w = r["word"]
             if w not in by_word:
-                by_word[w] = {"word": w, "first_date": r["date"], "last_date": r["date"], "best_rank": r["rank"], "appearances": 0, "history": []}
+                agg = agg_map.get(w)
+                by_word[w] = {
+                    "word": w,
+                    "first_date": agg["first_date"] if agg else r["date"],
+                    "last_date": agg["last_date"] if agg else r["date"],
+                    "best_rank": agg["best_rank"] if agg else r["rank"],
+                    "appearances": agg["cnt"] if agg else 1,
+                    "history": []
+                }
             info = by_word[w]
-            info["appearances"] += 1
-            info["first_date"] = min(info["first_date"], r["date"])
-            info["last_date"] = max(info["last_date"], r["date"])
-            info["best_rank"] = min(info["best_rank"], r["rank"])
             if len(info["history"]) < 10:
                 info["history"].append({"date": r["date"], "rank": r["rank"]})
         db.close()
         return sorted(by_word.values(), key=lambda x: x["appearances"], reverse=True)
-    except:
+    except Exception as e:
+        print(f"[搜索] {db_path}: {e}")
         return []
 
 def search_self_db(query):
@@ -311,6 +416,10 @@ def fetch_bilibili_hot():
 CACHE = {"weibo": [], "douyin": [], "wenyu": [], "kuaishou": [], "bilibili": [],
          "weibo_time": 0, "douyin_time": 0, "wenyu_time": 0, "kuaishou_time": 0, "bilibili_time": 0}
 cache_lock = threading.Lock()
+
+# 搜索结果缓存（TTL 5 分钟）
+SEARCH_CACHE = {}  # { "key|query": (timestamp, result_list) }
+SEARCH_CACHE_TTL = 300
 
 
 def poll_weibo():
@@ -559,7 +668,16 @@ class Handler(BaseHTTPRequestHandler):
             query = params.get("q", [""])[0].strip()
             if not query:
                 return self._json([])
-            # 优先查本地历史库（快，全）
+
+            # 检查缓存
+            cache_key = f"wb|{query}"
+            now_ts = time.time()
+            if cache_key in SEARCH_CACHE:
+                ts, val = SEARCH_CACHE[cache_key]
+                if now_ts - ts < SEARCH_CACHE_TTL:
+                    return self._json(val)
+
+            # 优先查本地历史库（FTS5 → LIKE）
             local_results = _search_db(os.path.join(BASE_DIR, "weibo_history.db"), query)
             if local_results:
                 result = []
@@ -570,7 +688,9 @@ class Handler(BaseHTTPRequestHandler):
                         "firstDate": r["first_date"],
                         "url": "https://s.weibo.com/weibo?q=%23" + urllib.request.quote(r["word"]) + "%23"
                     })
+                SEARCH_CACHE[cache_key] = (now_ts, result)
                 return self._json(result)
+
             # 兜底：weibotop.cn API
             results = search_topic(query)[:50]
             # 从自建库获取峰值排名
@@ -578,22 +698,21 @@ class Handler(BaseHTTPRequestHandler):
             self_results = search_weibo_self_db(query)
             for r in self_results:
                 peak_map[r["word"]] = r["best_rank"]
-            # 对自建库里没有的话题，用 weibotop.cn 补查（只查前5个，避免太慢）
+            # 对自建库里没有的话题，用 weibotop.cn 补查（只查前 10 个，避免太慢）
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            need_fetch = [(i, item) for i, item in enumerate(results) if not peak_map.get(item[0])][:20]
+            need_fetch = [(i, item) for i, item in enumerate(results) if not peak_map.get(item[0])][:10]
             if need_fetch:
                 def fetch_peak(item):
                     try:
                         detail = get_topic_detail(item[0])
-                        # 返回 [timeId, timestamp, rank]
                         if isinstance(detail, list) and len(detail) >= 3:
                             return item[0], int(detail[2])
                         return item[0], None
                     except:
                         return item[0], None
-                with ThreadPoolExecutor(max_workers=10) as ex:
+                with ThreadPoolExecutor(max_workers=5) as ex:
                     futures = {ex.submit(fetch_peak, item): idx for idx, item in need_fetch}
-                    for fut in as_completed(futures, timeout=15):
+                    for fut in as_completed(futures, timeout=5):
                         try:
                             name, rank = fut.result()
                             if rank:
@@ -610,27 +729,52 @@ class Handler(BaseHTTPRequestHandler):
                     "peakRank": peak,
                     "url": "https://s.weibo.com/weibo?q=%23" + urllib.request.quote(name) + "%23"
                 })
+            SEARCH_CACHE[cache_key] = (now_ts, result)
             self._json(result)
 
         elif path == "/api/search-douyin":
             query = params.get("q", [""])[0].strip().lower()
             if not query:
                 return self._json([])
+
+            # 检查缓存
+            cache_key = f"dy|{query}"
+            now_ts = time.time()
+            if cache_key in SEARCH_CACHE:
+                ts, val = SEARCH_CACHE[cache_key]
+                if now_ts - ts < SEARCH_CACHE_TTL:
+                    return self._json(val)
+
             results = []
             # 方法1: 查自建数据库（自己爬的）
             self_results = search_self_db(query)
-            # 方法2: 查第三方历史库（lonnyzhang423）
+            # 方法2: 查第三方历史库（lonnyzhang423，FTS5 优先）
             ext_results = []
             db_path = os.path.join(BASE_DIR, "douyin_history.db")
             if os.path.exists(db_path):
                 try:
                     db = sqlite3.connect(db_path)
+                    db.execute("PRAGMA journal_mode=WAL")
                     db.row_factory = sqlite3.Row
-                    rows = db.execute(
-                        "SELECT word, date, rank FROM topics WHERE word LIKE ? "
-                        "ORDER BY date DESC, rank ASC LIMIT 100",
-                        (f"%{query}%",)
-                    ).fetchall()
+                    has_fts = db.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table' AND name='topics_fts'"
+                    ).fetchone() is not None
+
+                    if has_fts:
+                        rows = db.execute(
+                            "SELECT t.word, t.date, t.rank FROM topics_fts f "
+                            "JOIN topics t ON t.id = f.rowid "
+                            "WHERE topics_fts MATCH ? "
+                            "ORDER BY t.date DESC, t.rank ASC LIMIT 100",
+                            (query,)
+                        ).fetchall()
+                    else:
+                        rows = db.execute(
+                            "SELECT word, date, rank FROM topics WHERE word LIKE ? "
+                            "ORDER BY date DESC, rank ASC LIMIT 100",
+                            (f"%{query}%",)
+                        ).fetchall()
+
                     ext_by_word = {}
                     for r in rows:
                         w = r["word"]
@@ -664,6 +808,8 @@ class Handler(BaseHTTPRequestHandler):
                            "appearances": 1, "history": []} for item in items
                           if query in item.get("title", "").lower()]
                 results = matched[:20]
+
+            SEARCH_CACHE[cache_key] = (now_ts, results)
             self._json(results)
 
         elif path == "/" or path == "/index.html":
@@ -827,6 +973,9 @@ def main():
     restored = import_backup()
     if restored:
         print(f"📦 从 GitHub 备份恢复了 {restored} 条历史数据")
+
+    # 自动构建 FTS5 索引（如果不存在）
+    _ensure_fts()
 
     print("=" * 50)
     print("  🔥 微博 + 🎵 抖音 热搜统一面板")
