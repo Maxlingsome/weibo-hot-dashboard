@@ -68,18 +68,33 @@ def check_rate_limit(client_ip):
         return True, "ok"
 
 
-def firewall(client_ip, user_agent, path):
+def firewall(client_ip, user_agent, path, referer=""):
     """
     反爬防火墙入口。
     返回 (allowed: bool, http_code: int, reason: str)
     """
-    # 静态资源放行
-    if path.endswith((".css", ".js", ".ico", ".png", ".svg", ".woff2")):
+    # 静态资源 + HTML 页面放行（不检查 Referer）
+    if path.endswith((".css", ".js", ".ico", ".png", ".svg", ".woff2", ".html")) or path == "/":
         return True, 200, "static"
 
     # 健康检查放行
     if path == "/health":
         return True, 200, "health"
+
+    # API 请求 Referer 检查：只允许自己的域名访问
+    if path.startswith("/api/"):
+        ok_domains = [TRUSTED_DOMAIN, "localhost", "127.0.0.1"]
+        ref_ok = False
+        if referer:
+            for d in ok_domains:
+                if d in referer:
+                    ref_ok = True
+                    break
+        # 也允许无 Referer 的请求（本地开发 / 直接访问）
+        if not referer:
+            ref_ok = True
+        if not ref_ok:
+            return False, 403, "bad_referer"
 
     # 机器人 UA 拦截
     if is_bot_ua(user_agent):

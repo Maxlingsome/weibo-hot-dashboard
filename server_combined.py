@@ -598,7 +598,8 @@ class Handler(BaseHTTPRequestHandler):
         """反爬检查，不过则直接返回 403/429"""
         ip = self.client_address[0]
         ua = self.headers.get("User-Agent", "")
-        ok, code, reason = firewall(ip, ua, self.path)
+        ref = self.headers.get("Referer", "")
+        ok, code, reason = firewall(ip, ua, self.path, ref)
         if not ok:
             self.send_response(code)
             self.send_header("Content-Type", "text/plain")
