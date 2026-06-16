@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlparse
 # 引入微博 API
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from weibotop_api import get_latest, get_items, search_topic, get_topic_detail
-from topic_scraper import scrape_topics_batch, cleanup_old_detail
+from topic_scraper import scrape_topics_batch
 
 # ---- 自建历史数据库（抖音 + 微博）----
 # 线上 Railway 使用持久化卷 /data，本地开发用项目目录
@@ -1067,7 +1067,6 @@ def backup_loop():
         time.sleep(6 * 3600)
         try:
             print(f"[备份] {push_backup()}")
-            cleanup_old_detail(WB_SELF_DB)
         except Exception as e:
             print(f"[备份] 异常: {e}")
 
@@ -1075,7 +1074,6 @@ def backup_loop():
 def main():
     init_self_db()
     _init_topic_detail_tables(WB_SELF_DB)
-    cleanup_old_detail(WB_SELF_DB)
     # 从备份恢复（如果本地库为空）
     restored = import_backup()
     if restored:
