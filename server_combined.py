@@ -22,9 +22,12 @@ from weibotop_api import get_latest, get_items, search_topic, get_topic_detail
 from topic_scraper import scrape_topics_batch, cleanup_old_detail
 
 # ---- 自建历史数据库（抖音 + 微博）----
-DY_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "douyin_self.db")
-WB_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "weibo_self.db")
-KS_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kuaishou_self.db")
+# 线上 Railway 使用持久化卷 /data，本地开发用项目目录
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = "/data" if os.path.isdir("/data") else BASE_DIR
+DY_SELF_DB = os.path.join(DATA_DIR, "douyin_self.db")
+WB_SELF_DB = os.path.join(DATA_DIR, "weibo_self.db")
+KS_SELF_DB = os.path.join(DATA_DIR, "kuaishou_self.db")
 
 def _init_one_db(db_path):
     db = sqlite3.connect(db_path)
