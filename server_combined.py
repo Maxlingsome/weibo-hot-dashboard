@@ -628,32 +628,32 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         params = parse_qs(parsed.query)
 
-        if path == "/api/weibo":
+        if path == "/api/v1/h":
             with cache_lock:
                 data = list(CACHE["weibo"])
             self._json(data)
 
-        elif path == "/api/douyin":
+        elif path == "/api/v1/d":
             with cache_lock:
                 data = list(CACHE["douyin"])
             self._json(data)
 
-        elif path == "/api/wenyu":
+        elif path == "/api/v1/w":
             with cache_lock:
                 data = list(CACHE["wenyu"])
             self._json(data)
 
-        elif path == "/api/kuaishou":
+        elif path == "/api/v1/k":
             with cache_lock:
                 data = list(CACHE["kuaishou"])
             self._json(data)
 
-        elif path == "/api/bilibili":
+        elif path == "/api/v1/b":
             with cache_lock:
                 data = list(CACHE["bilibili"])
             self._json(data)
 
-        elif path == "/api/topic-detail":
+        elif path == "/api/v1/t":
             topic = params.get("q", [""])[0].strip()
             if not topic:
                 return self._json({"topic": "", "has_data": False})
@@ -708,7 +708,7 @@ class Handler(BaseHTTPRequestHandler):
 
             self._json(result)
 
-        elif path == "/api/monitor":
+        elif path == "/api/v1/m":
             query = params.get("q", [""])[0].strip()
             if not query:
                 return self._json({"error": "请输入话题词"})
@@ -751,7 +751,7 @@ class Handler(BaseHTTPRequestHandler):
                     }
             self._json(result)
 
-        elif path == "/api/monitor-detail":
+        elif path == "/api/v1/md":
             word = params.get("word", [""])[0].strip()
             platform = params.get("platform", ["weibo"])[0].strip()
             if not word:
@@ -774,7 +774,7 @@ class Handler(BaseHTTPRequestHandler):
                     unique.append(r)
             self._json(unique)
 
-        elif path == "/api/all":
+        elif path == "/api/v1/a":
             with cache_lock:
                 data = {
                     "weibo": {"items": list(CACHE["weibo"]), "updated": CACHE["weibo_time"]},
@@ -782,7 +782,7 @@ class Handler(BaseHTTPRequestHandler):
                 }
             self._json(data)
 
-        elif path == "/api/search":
+        elif path == "/api/v1/s":
             query = params.get("q", [""])[0].strip()
             if not query:
                 return self._json([])
@@ -850,7 +850,7 @@ class Handler(BaseHTTPRequestHandler):
             SEARCH_CACHE[cache_key] = (now_ts, result)
             self._json(result)
 
-        elif path == "/api/search-douyin":
+        elif path == "/api/v1/sd":
             query = params.get("q", [""])[0].strip().lower()
             if not query:
                 return self._json([])
@@ -990,7 +990,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._check_firewall():
             return
-        if self.path == "/api/generate":
+        if self.path == "/api/v1/g":
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
             self._json(generate_topics(body.get("event", "").strip()))
         else:

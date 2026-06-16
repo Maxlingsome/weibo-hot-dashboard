@@ -294,7 +294,7 @@ function switchHot(p){
   loadHotData();
 }
 async function loadHotData(){
-  const apis={weibo:'/api/weibo',douyin:'/api/douyin',kuaishou:'/api/kuaishou',bilibili:'/api/bilibili'};
+  const apis={weibo:'/api/v1/h',douyin:'/api/v1/d',kuaishou:'/api/v1/k',bilibili:'/api/v1/b'};
   try{
     const items=await fetch(apis[hotPlatform]).then(r=>r.json());
     if(!items.length)return;
@@ -334,7 +334,7 @@ function switchSearch(m){
 async function doSearch(){
   const q=document.getElementById('searchInput').value.trim();if(!q)return;
   const btn=document.getElementById('searchBtn');btn.disabled=true;btn.textContent='搜索中…';
-  const api=searchMode==='douyin'?'/api/search-douyin':'/api/search';
+  const api=searchMode==='douyin'?'/api/v1/sd':'/api/v1/s';
   try{
     const items=await fetch(api+'?q='+encodeURIComponent(q)).then(r=>r.json());
     const div=document.getElementById('searchResults');
@@ -367,7 +367,7 @@ async function doMonitor(){
   const q=document.getElementById('monitorInput').value.trim();if(!q)return;
   const btn=document.getElementById('monitorBtn');btn.disabled=true;btn.textContent='监测中…';
   try{
-    const data=await fetch('/api/monitor?q='+encodeURIComponent(q)).then(r=>r.json());
+    const data=await fetch('/api/v1/m?q='+encodeURIComponent(q)).then(r=>r.json());
     renderMonitor(data);
   }catch(e){document.getElementById('monitorSummary').innerHTML='<div class="empty">查询失败</div>'}
   btn.disabled=false;btn.textContent='监测';
@@ -410,7 +410,7 @@ function renderMonitor(data){
   document.getElementById('monitorTable').innerHTML=html;
   // 微博话题详情 + 趋势
   if(data.platforms.weibo&&data.platforms.weibo.found){
-    fetch('/api/topic-detail?q='+encodeURIComponent(q))
+    fetch('/api/v1/t?q='+encodeURIComponent(q))
       .then(function(r){return r.json()})
       .then(function(detail){renderTopicDetail(detail)})
       .catch(function(){});
@@ -502,7 +502,7 @@ async function doGenerate(){
   if(!input){div.innerHTML='<p style="color:#f87171;font-size:13px">请输入事件描述</p>';return}
   btn.disabled=true;btn.textContent='生成中…';div.innerHTML='';
   try{
-    const data=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event:input})}).then(r=>r.json());
+    const data=await fetch('/api/v1/g',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event:input})}).then(r=>r.json());
     if(data.error){div.innerHTML='<p style="color:#f87171;font-size:13px">'+data.error+'</p>'}
     else if(data.directions){
       let h='';data.directions.forEach(d=>{h+='<div class="gen-dir"><div class="dir-name">'+d.name+' '+d.score+'</div>';d.candidates.forEach(c=>h+='<div class="dir-cand">'+c+'</div>');h+='<div class="dir-meta">'+d.technique+' / '+d.emotion+'</div></div>'});
