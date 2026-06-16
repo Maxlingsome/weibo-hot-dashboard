@@ -990,15 +990,15 @@ def _ensure_backup_dir():
     os.makedirs(BACKUP_DIR, exist_ok=True)
 
 def export_backup():
-    """导出双平台数据库 → backup/ 目录（含峰值汇总）"""
+    """导出全量数据（含话题详情+趋势）→ backup/ 目录，gzip 压缩"""
+    import gzip
     _ensure_backup_dir()
     total = 0
-    for db_path, filename in [(DY_SELF_DB, "douyin_data.json"), (WB_SELF_DB, "weibo_data.json"), (KS_SELF_DB, "kuaishou_data.json")]:
+    # 1. 热搜排名数据
+    for db_path, filename in [(DY_SELF_DB, "douyin_data.json.gz"), (WB_SELF_DB, "weibo_data.json.gz"), (KS_SELF_DB, "kuaishou_data.json.gz")]:
         db = sqlite3.connect(db_path)
         db.row_factory = sqlite3.Row
         rows = db.execute("SELECT word, date, rank, hot_value FROM topics ORDER BY date DESC, rank ASC").fetchall()
-        db.close()
-        # 计算每个话题的最高排名
         peak = {}
         for r in rows:
             w = r["word"]
@@ -1008,19 +1008,53 @@ def export_backup():
             info["appearances"] += 1
             info["first_date"] = min(info["first_date"], r["date"])
             info["last_date"] = max(info["last_date"], r["date"])
-
+        # 导出 topic_detail + topic_trend
+        detail_rows = []
+        try:
+            detail_rows = db.execute("SELECT * FROM topic_detail ORDER BY scrape_time DESC").fetchall()
+        except:
+            pass
+        trend_rows = []
+        try:
+            trend_rows = db.execute("SELECT * FROM topic_trend ORDER BY scrape_hour DESC").fetchall()
+        except:
+            pass
         data = {
             "updated": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "total_records": len(rows),
             "total_topics": len(peak),
             "records": [{"word": r["word"], "date": r["date"], "rank": r["rank"], "hot": r["hot_value"]} for r in rows],
-            "peak_summary": sorted(peak.values(), key=lambda x: x["appearances"], reverse=True)
+            "peak_summary": sorted(peak.values(), key=lambda x: x["appearances"], reverse=True),
+            "topic_details": [dict(r) for r in detail_rows],
+            "topic_trends": [dict(r) for r in trend_rows],
         }
         path = os.path.join(BACKUP_DIR, filename)
-        with open(path, "w", encoding="utf-8") as f:
+        with gzip.open(path, "wt", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
         total += len(rows)
-    return os.path.join(BACKUP_DIR, "douyin_data.json"), total
+        db.close()
+    return BACKUP_DIR, total
+
+def auto_trim_db(db_path, max_mb=400):
+    """数据库超过 max_mb 时，删除最旧 30% 的 topics 和 topic_detail 记录"""
+    size_mb = os.path.getsize(db_path) / (1024 * 1024)
+    if size_mb < max_mb:
+        return
+    db = sqlite3.connect(db_path)
+    # 保留最近记录，删最旧的 30%
+    for table in ["topics", "topic_detail"]:
+        try:
+            total = db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            delete_n = int(total * 0.3)
+            if delete_n > 0:
+                db.execute(f"DELETE FROM {table} WHERE id IN (SELECT id FROM {table} ORDER BY id ASC LIMIT ?)", (delete_n,))
+        except:
+            pass
+    db.commit()
+    db.execute("VACUUM")
+    db.close()
+    new_mb = os.path.getsize(db_path) / (1024 * 1024)
+    print(f"[DB瘦身] {os.path.basename(db_path)}: {size_mb:.0f}MB → {new_mb:.0f}MB")
 
 def import_backup():
     """从备份恢复（仅当本地数据库为空时）"""
@@ -1048,14 +1082,14 @@ def import_backup():
         return 0
 
 def push_backup():
-    """导出 + git push 到 GitHub"""
+    """导出 + git push 到 GitHub（压缩格式节省空间）"""
     try:
         path, count = export_backup()
         if count == 0:
             return "无数据，跳过"
         import subprocess
-        subprocess.run(["git", "add", "backup/douyin_data.json", "backup/weibo_data.json", "backup/kuaishou_data.json"], cwd=BASE_DIR, capture_output=True, timeout=20)
-        subprocess.run(["git", "commit", "-m", f"[自动备份] {count}条(微博+抖音) {time.strftime('%m-%d %H:%M')}"],
+        subprocess.run(["git", "add", "backup/"], cwd=BASE_DIR, capture_output=True, timeout=20)
+        subprocess.run(["git", "commit", "-m", f"[自动备份] {count}条 {time.strftime('%m-%d %H:%M')}"],
                        cwd=BASE_DIR, capture_output=True, timeout=20)
         subprocess.run(["git", "push"], cwd=BASE_DIR, capture_output=True, timeout=60)
         return f"✅ {count} 条已备份到 GitHub"
@@ -1067,6 +1101,10 @@ def backup_loop():
         time.sleep(6 * 3600)
         try:
             print(f"[备份] {push_backup()}")
+            # 备份后检查 DB 大小，超过 400MB 自动瘦身
+            for db_path in [WB_SELF_DB, DY_SELF_DB, KS_SELF_DB]:
+                if os.path.exists(db_path):
+                    auto_trim_db(db_path, max_mb=400)
         except Exception as e:
             print(f"[备份] 异常: {e}")
 
