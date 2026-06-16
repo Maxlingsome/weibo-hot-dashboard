@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, urlparse
 # 引入微博 API
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from weibotop_api import get_latest, get_items, search_topic, get_topic_detail
+from topic_scraper import scrape_topics_batch, cleanup_old_detail
 
 # ---- 自建历史数据库（抖音 + 微博）----
 DY_SELF_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "douyin_self.db")
@@ -39,6 +40,35 @@ def _init_one_db(db_path):
 def init_self_db():
     for db_path in [DY_SELF_DB, WB_SELF_DB, KS_SELF_DB]:
         _init_one_db(db_path)
+
+def _init_topic_detail_tables(db_path):
+    """创建话题详情 + 趋势表（仅微博）"""
+    db = sqlite3.connect(db_path)
+    db.execute("PRAGMA journal_mode=WAL")
+    db.execute("""CREATE TABLE IF NOT EXISTS topic_detail (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        topic_name TEXT NOT NULL,
+        scrape_time TEXT NOT NULL,
+        read_count INTEGER DEFAULT 0,
+        mention_count INTEGER DEFAULT 0,
+        interact_count INTEGER DEFAULT 0,
+        ori_count INTEGER DEFAULT 0,
+        sum_24h TEXT,
+        sum_30d TEXT,
+        current_rank INTEGER DEFAULT 0
+    )""")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_td_name ON topic_detail(topic_name)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_td_time ON topic_detail(scrape_time)")
+    db.execute("""CREATE TABLE IF NOT EXISTS topic_trend (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        topic_name TEXT NOT NULL,
+        trend_type TEXT NOT NULL,
+        scrape_hour TEXT NOT NULL,
+        data_json TEXT NOT NULL
+    )""")
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_tt_unique ON topic_trend(topic_name, trend_type, scrape_hour)")
+    db.commit()
+    db.close()
 
 def _save_snapshot(db_path, items, word_key="title"):
     """通用：保存热搜快照，按小时记录（每次抓取独立存储）"""
@@ -318,6 +348,7 @@ def fetch_weibo_hot():
                 "hot_value": num,
                 "badge": badge,
                 "label": wy_label,
+                "topic_flag": item.get("topic_flag", 0),
                 "url": f"https://s.weibo.com/weibo?q=%23{urllib.request.quote(word)}%23"
             })
         return result
@@ -431,10 +462,23 @@ def poll_weibo():
                     CACHE["weibo"] = items
                     CACHE["weibo_time"] = time.time()
                 save_weibo_snapshot(items)
+
+                # 话题详情 + 趋势抓取（后台子线程，不阻塞主轮询）
+                topic_items = [
+                    {"title": i["title"], "rank": i["rank"]}
+                    for i in items if i.get("topic_flag") == 1
+                ]
+                if topic_items:
+                    threading.Thread(
+                        target=scrape_topics_batch,
+                        args=(topic_items, WB_SELF_DB),
+                        daemon=True
+                    ).start()
+
                 print(f"[微博] {len(items)} 条热搜（已保存）")
         except Exception as e:
             print(f"[微博] 轮询异常: {e}")
-        time.sleep(60)  # 3分钟
+        time.sleep(60)
 
 
 def poll_douyin():
@@ -590,6 +634,61 @@ class Handler(BaseHTTPRequestHandler):
                 data = list(CACHE["bilibili"])
             self._json(data)
 
+        elif path == "/api/topic-detail":
+            topic = params.get("q", [""])[0].strip()
+            if not topic:
+                return self._json({"topic": "", "has_data": False})
+
+            db = sqlite3.connect(WB_SELF_DB)
+            db.row_factory = sqlite3.Row
+
+            # 最新一条详情
+            detail_row = db.execute(
+                """SELECT * FROM topic_detail WHERE topic_name=?
+                   ORDER BY scrape_time DESC LIMIT 1""",
+                (topic,)
+            ).fetchone()
+
+            # 今天的趋势数据
+            today = time.strftime("%Y-%m-%d")
+            trend_rows = db.execute(
+                """SELECT trend_type, scrape_hour, data_json FROM topic_trend
+                   WHERE topic_name=? AND scrape_hour >= ?
+                   ORDER BY scrape_hour DESC, trend_type""",
+                (topic, today + " 00:00")
+            ).fetchall()
+            db.close()
+
+            result = {"topic": topic, "has_data": False}
+
+            if detail_row:
+                result["has_data"] = True
+                result["latest"] = {
+                    "time": detail_row["scrape_time"],
+                    "read_count": detail_row["read_count"],
+                    "mention_count": detail_row["mention_count"],
+                    "interact_count": detail_row["interact_count"],
+                    "ori_count": detail_row["ori_count"],
+                    "current_rank": detail_row["current_rank"],
+                    "sum_24h": json.loads(detail_row["sum_24h"]) if detail_row["sum_24h"] else {},
+                    "sum_30d": json.loads(detail_row["sum_30d"]) if detail_row["sum_30d"] else {},
+                }
+
+            if trend_rows:
+                result["trend"] = {"read": [], "discussion": [], "original": [], "interaction": []}
+                seen_types = set()
+                for row in trend_rows:
+                    ttype = row["trend_type"]
+                    if ttype in seen_types:
+                        continue
+                    seen_types.add(ttype)
+                    points = json.loads(row["data_json"])
+                    type_map = {"read": "read", "me": "discussion", "ori": "original", "partake": "interaction"}
+                    mapped = type_map.get(ttype, ttype)
+                    result["trend"][mapped] = points
+
+            self._json(result)
+
         elif path == "/api/monitor":
             query = params.get("q", [""])[0].strip()
             if not query:
@@ -605,13 +704,13 @@ class Handler(BaseHTTPRequestHandler):
                 for db_path in sources:
                     records.extend(_get_topic_records(db_path, query) if os.path.exists(db_path) else [])
                 if records:
-                    seen = set()
-                    unique = []
-                    for r in sorted(records, key=lambda x: x["date"]):
-                        k = f'{r["date"]}-{r["rank"]}'
-                        if k not in seen:
-                            seen.add(k)
-                            unique.append(r)
+                    # 按天聚合：每天取最优排名
+                    day_best = {}  # date_only -> {rank, hot, date}
+                    for r in records:
+                        day = r["date"][:10]  # "2026-06-16 14:00" -> "2026-06-16"
+                        if day not in day_best or r["rank"] < day_best[day]["rank"]:
+                            day_best[day] = r
+                    unique = sorted(day_best.values(), key=lambda x: x["date"])
                     ranks = [r["rank"] for r in unique if r["rank"] > 0]
                     result["platforms"][platform] = {
                         "found": True,
@@ -965,12 +1064,15 @@ def backup_loop():
         time.sleep(6 * 3600)
         try:
             print(f"[备份] {push_backup()}")
+            cleanup_old_detail(WB_SELF_DB)
         except Exception as e:
             print(f"[备份] 异常: {e}")
 
 
 def main():
     init_self_db()
+    _init_topic_detail_tables(WB_SELF_DB)
+    cleanup_old_detail(WB_SELF_DB)
     # 从备份恢复（如果本地库为空）
     restored = import_backup()
     if restored:
