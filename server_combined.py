@@ -939,9 +939,24 @@ class Handler(BaseHTTPRequestHandler):
             if not os.path.exists(html_path):
                 html_path = os.path.join(BASE_DIR, "index_combined.html")
             if os.path.exists(html_path):
+                with open(html_path, "r", encoding="utf-8") as f:
+                    html = f.read()
+                # 服务端注入初始数据，前端首屏无需调 API
+                with cache_lock:
+                    seed = {
+                        "weibo": CACHE["weibo"],
+                        "douyin": CACHE["douyin"],
+                        "kuaishou": CACHE["kuaishou"],
+                        "bilibili": CACHE["bilibili"],
+                        "ts": int(time.time()),
+                    }
+                inject = f"\n<script>window.__SEED__={json.dumps(seed,ensure_ascii=False)};</script>\n"
+                html = html.replace("</head>", inject + "</head>")
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(html.encode("utf-8"))))
                 self.end_headers()
+                self.wfile.write(html.encode("utf-8"))
                 with open(html_path, "rb") as f:
                     self.wfile.write(f.read())
             else:

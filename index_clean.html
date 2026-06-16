@@ -294,31 +294,49 @@ function switchHot(p){
   loadHotData();
 }
 async function loadHotData(){
-  const apis={weibo:'/api/v1/h',douyin:'/api/v1/d',kuaishou:'/api/v1/k',bilibili:'/api/v1/b'};
   try{
+    const apis={weibo:'/api/v1/h',douyin:'/api/v1/d',kuaishou:'/api/v1/k',bilibili:'/api/v1/b'};
     const items=await fetch(apis[hotPlatform]).then(r=>r.json());
-    if(!items.length)return;
-    const d=new Date(); const ts=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
-    document.getElementById('hotMeta').textContent=ts+'刷新';
-    let rows='';
-    items.forEach(i=>{
-      const rc=i.rank<=10?' style="color:'+hotColors[hotPlatform]+';font-weight:700"':'';
-      if(hotPlatform==='weibo'){
-        rows+='<tr><td class="rank"'+rc+'>'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a>'+(i.badge?' <span class="badge">'+i.badge+'</span>':'')+'</td><td class="label-cell">'+(i.label||'')+'</td><td class="hot-val">'+i.hot+'</td></tr>';
-      }else if(hotPlatform==='bilibili'){
-        rows+='<tr><td class="rank"'+rc+'>'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td></tr>';
-      }else{
-        rows+='<tr><td class="rank"'+rc+'>'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td><td class="hot-val">'+i.hot+'</td></tr>';
-      }
-    });
-    const thead=hotPlatform==='weibo'
-      ?'<thead><tr><th>#</th><th>话题</th><th>标签</th><th style="text-align:right">热度</th></tr></thead>'
-      :'<thead><tr><th>#</th><th>话题</th>'+(hotPlatform!=='bilibili'?'<th style="text-align:right">热度</th>':'')+'</tr></thead>';
-    document.getElementById('hotContent').innerHTML='<div class="panel"><table>'+thead+'<tbody>'+rows+'</tbody></table></div>';
+    if(items&&items.length)renderHotTable(items);
   }catch(e){}
 }
 
-buildHotToggle();loadHotData();
+function renderHotTable(items){
+  if(!items||!items.length)return;
+  const d=new Date(),ts=d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+  document.getElementById('hotMeta').textContent=ts+'刷新';
+  let rows='';
+  items.forEach(i=>{
+    const rc=i.rank<=10?' style="color:'+hotColors[hotPlatform]+';font-weight:700"':'';
+    if(hotPlatform==='weibo'){
+      rows+='<tr><td class="rank"'+rc+'>'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a>'+(i.badge?' <span class="badge">'+i.badge+'</span>':'')+'</td><td class="label-cell">'+(i.label||'')+'</td><td class="hot-val">'+i.hot+'</td></tr>';
+    }else if(hotPlatform==='bilibili'){
+      rows+='<tr><td class="rank"'+rc+'>'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td></tr>';
+    }else{
+      rows+='<tr><td class="rank"'+rc+'>'+i.rank+'</td><td class="word"><a href="'+i.url+'" target="_blank">'+i.title+'</a></td><td class="hot-val">'+i.hot+'</td></tr>';
+    }
+  });
+  const thead=hotPlatform==='weibo'
+    ?'<thead><tr><th>#</th><th>话题</th><th>标签</th><th style="text-align:right">热度</th></tr></thead>'
+    :'<thead><tr><th>#</th><th>话题</th>'+(hotPlatform!=='bilibili'?'<th style="text-align:right">热度</th>':'')+'</tr></thead>';
+  document.getElementById('hotContent').innerHTML='<div class="panel"><table>'+thead+'<tbody>'+rows+'</tbody></table></div>';
+}
+function initHotData(){
+  // 服务端注入的种子数据优先（无需 API 调用）
+  if(window.__SEED__&&window.__SEED__.ts&&(Date.now()/1000-window.__SEED__.ts<120)){
+    CACHE['weibo']=window.__SEED__.weibo||[];
+    CACHE['douyin']=window.__SEED__.douyin||[];
+    CACHE['kuaishou']=window.__SEED__.kuaishou||[];
+    CACHE['bilibili']=window.__SEED__.bilibili||[];
+    CACHE['weibo_time']=CACHE['douyin_time']=CACHE['kuaishou_time']=CACHE['bilibili_time']=Date.now()/1000;
+    renderHotTable(CACHE['weibo']);
+  }else{
+    loadHotData();
+  }
+}
+// 缓存（内存中，供其他 tab 使用）
+var CACHE={weibo:[],douyin:[],kuaishou:[],bilibili:[],weibo_time:0,douyin_time:0,kuaishou_time:0,bilibili_time:0};
+buildHotToggle();initHotData();
 setInterval(loadHotData,60000);
 
 // === Search ===
