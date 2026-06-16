@@ -23,7 +23,7 @@ from topic_scraper import scrape_topics_batch
 from anti_scrape import firewall
 
 # ---- 自建历史数据库（抖音 + 微博）----
-# 线上 Railway 使用持久化卷 /data，本地开发用项目目录
+# 线上 Railway 使用持久化卷 /data（需在 Railway 后台创建 Volume 挂载到此路径）
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = "/data" if os.path.isdir("/data") else BASE_DIR
 DY_SELF_DB = os.path.join(DATA_DIR, "douyin_self.db")
