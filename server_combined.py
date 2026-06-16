@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from weibotop_api import get_latest, get_items, search_topic, get_topic_detail
 from topic_scraper import scrape_topics_batch
+from anti_scrape import firewall
 
 # ---- 自建历史数据库（抖音 + 微博）----
 # 线上 Railway 使用持久化卷 /data，本地开发用项目目录
@@ -593,21 +594,35 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 class Handler(BaseHTTPRequestHandler):
+    def _check_firewall(self):
+        """反爬检查，不过则直接返回 403/429"""
+        ip = self.client_address[0]
+        ua = self.headers.get("User-Agent", "")
+        ok, code, reason = firewall(ip, ua, self.path)
+        if not ok:
+            self.send_response(code)
+            self.send_header("Content-Type", "text/plain")
+            self.end_headers()
+            self.wfile.write(f"Blocked: {reason}".encode())
+        return ok
+
     def _json(self, data):
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", "https://weibo-hot-dashboard-production.up.railway.app")
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode())
 
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", "https://weibo-hot-dashboard-production.up.railway.app")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def do_GET(self):
+        if not self._check_firewall():
+            return
         parsed = urlparse(self.path)
         path = parsed.path
         params = parse_qs(parsed.query)
@@ -972,6 +987,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
+        if not self._check_firewall():
+            return
         if self.path == "/api/generate":
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
             self._json(generate_topics(body.get("event", "").strip()))
