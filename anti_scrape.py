@@ -12,7 +12,7 @@ from collections import defaultdict
 # ============================================================
 # 配置
 # ============================================================
-MAX_RPM = 30          # 每个 IP 每分钟最多请求数（正常用户点不了这么快）
+MAX_RPM = 8           # 每个 IP 每分钟最多请求数
 BAN_SECONDS = 300     # 超限后封禁 5 分钟
 TRUSTED_DOMAIN = "weibo-hot-dashboard-production.up.railway.app"
 
