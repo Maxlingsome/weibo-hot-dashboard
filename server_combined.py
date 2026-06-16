@@ -652,17 +652,6 @@ class Handler(BaseHTTPRequestHandler):
                 data = list(CACHE["bilibili"])
             self._json(data)
 
-        elif path == "/debug":
-            import glob
-            self._json({
-                "data_dir": DATA_DIR,
-                "volume_exists": os.path.isdir("/data"),
-                "files_in_data": os.listdir("/data") if os.path.isdir("/data") else [],
-                "files_in_basedir": [f for f in os.listdir(BASE_DIR) if f.endswith(".db")],
-                "db_sizes": {f: f"{os.path.getsize(os.path.join(DATA_DIR,f))/1024/1024:.1f}MB" for f in os.listdir(DATA_DIR) if f.endswith(".db")} if os.path.isdir(DATA_DIR) else {},
-                "weibo_items": len(CACHE["weibo"]),
-            })
-
         elif path == "/api/topic-detail":
             topic = params.get("q", [""])[0].strip()
             if not topic:
