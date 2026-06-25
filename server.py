@@ -286,6 +286,29 @@ class Handler(BaseHTTPRequestHandler):
             self._set_headers("text/html")
             self.wfile.write(b"<script>location.href='index.html'</script>")
 
+        else:
+            # 静态文件服务
+            path = parsed.path.lstrip("/") or "index.html"
+            # 安全：阻止路径穿越
+            if ".." in path or path.startswith("/"):
+                self._set_headers()
+                self.wfile.write(json.dumps({"error": "forbidden"}, ensure_ascii=False).encode())
+                return
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
+            if not os.path.isfile(filepath):
+                self._set_headers()
+                self.wfile.write(json.dumps({"error": "not found"}, ensure_ascii=False).encode())
+                return
+            ext = os.path.splitext(path)[1].lower()
+            mime = {
+                ".html": "text/html", ".css": "text/css", ".js": "application/javascript",
+                ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml",
+                ".ico": "image/x-icon", ".woff2": "font/woff2"
+            }.get(ext, "application/octet-stream")
+            self._set_headers(mime)
+            with open(filepath, "rb") as f:
+                self.wfile.write(f.read())
+
     def do_POST(self):
         if self.path in ("/generate", "/api/v1/g"):
             content_length = int(self.headers.get("Content-Length", 0))
